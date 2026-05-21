@@ -1,0 +1,37 @@
+*.iml
+.gradle
+/local.properties
+/.idea
+.DS_Store
+/build
+/captures
+.externalNativeBuild
+.cxx
+local.properties
+
+# Android build outputs
+app/build/
+build/
+
+# Keystore files (NEVER commit these)
+*.jks
+*.keystore
+
+# Google Services (contains API keys)
+google-services.json
+
+# Kotlin/Java output
+*.class
+*.jar
+*.war
+*.aar
+
+# Gradle wrapper (keep gradlew scripts, ignore binaries)
+!gradle/wrapper/gradle-wrapper.jar
+
+# IDE files
+.idea/
+*.iml
+*.ipr
+*.iws
+out/
