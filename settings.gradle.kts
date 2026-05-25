@@ -22,6 +22,6 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "OmniLog"
+rootProject.name = "RoutineLog"
 include(":app")
  

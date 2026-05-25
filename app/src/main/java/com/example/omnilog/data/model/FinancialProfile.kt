@@ -8,5 +8,6 @@ data class FinancialProfile(
     @PrimaryKey
     var userId: String = "local_user",
     var monthlySalary: Double = 0.0,
-    var fixedExpenses: Double = 0.0
+    var fixedExpenses: Double = 0.0,
+    var monthlyInvestments: Double = 0.0
 )

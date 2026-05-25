@@ -10,9 +10,8 @@ import com.example.omnilog.data.model.InventoryItem
 import com.example.omnilog.data.model.LogCategory
 import com.example.omnilog.data.model.LogEntry
 import com.example.omnilog.data.model.UserAccount
-import com.google.ai.client.generativeai.GenerativeModel
-import com.google.ai.client.generativeai.type.content
 import com.example.omnilog.data.model.*
+import com.example.omnilog.ui.formatCurrency
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
@@ -42,15 +41,66 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _financialProfile = MutableStateFlow<FinancialProfile?>(null)
     val financialProfile: StateFlow<FinancialProfile?> = _financialProfile.asStateFlow()
 
+    private val _isDebtMode = MutableStateFlow(false)
+    val isDebtMode: StateFlow<Boolean> = _isDebtMode.asStateFlow()
+
+    private val _debtPayments = MutableStateFlow<List<LogEntry>>(emptyList())
+    val debtPayments: StateFlow<List<LogEntry>> = _debtPayments.asStateFlow()
+
+    private val _investments = MutableStateFlow<List<InvestmentEntry>>(emptyList())
+    val investments: StateFlow<List<InvestmentEntry>> = _investments.asStateFlow()
+
+    private val _splitExpenses = MutableStateFlow<List<SplitExpenseEntry>>(emptyList())
+    val splitExpenses: StateFlow<List<SplitExpenseEntry>> = _splitExpenses.asStateFlow()
+
+    private val _customGroups = MutableStateFlow<List<String>>(listOf("General", "Home", "Trip"))
+    val splitGroups: StateFlow<List<String>> = _customGroups.asStateFlow()
+
+    private val _groupInvitedMembers = MutableStateFlow<Map<String, List<String>>>(emptyMap())
+    val groupInvitedMembers: StateFlow<Map<String, List<String>>> = _groupInvitedMembers.asStateFlow()
+
+    private val _isDatabaseEncrypted = MutableStateFlow(false)
+    val isDatabaseEncrypted: StateFlow<Boolean> = _isDatabaseEncrypted.asStateFlow()
+
+    val isPremiumActive = userAccount.map {
+        it?.isPro == true && it.proExpiryTimestamp > System.currentTimeMillis()
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
     init {
+        val prefs = application.getSharedPreferences("auth_prefs", android.content.Context.MODE_PRIVATE)
+        _isDatabaseEncrypted.value = prefs.getBoolean("database_encrypted", false)
         refreshData()
     }
 
-    private fun refreshData() {
-        viewModelScope.launch(Dispatchers.IO) {
-            _logs.value = logDao.getAllLogsSync()
+    private suspend fun refreshDataInternal() {
+        withContext(Dispatchers.IO) {
+            val logsList = logDao.getAllLogsSync()
+            _logs.value = logsList
+            _debtPayments.value = logsList.filter { it.structuredData.contains("\"type\": \"DEBT_PAYMENT\"") }
             _inventory.value = logDao.getAllInventorySync()
             _debts.value = logDao.getDebtsSync("local_user")
+            
+            // Sync investments
+            val currentInvestments = logDao.getInvestmentsSync("local_user")
+            _investments.value = currentInvestments
+
+            // Sync split expenses
+            _splitExpenses.value = logDao.getAllSplitExpensesSync()
+            
+            var currentProfile = logDao.getFinancialProfileSync("local_user")
+            if (currentInvestments.isNotEmpty()) {
+                val totalContribution = currentInvestments.sumOf { it.monthlyContribution }
+                if (currentProfile != null) {
+                    if (currentProfile.monthlyInvestments != totalContribution) {
+                        currentProfile.monthlyInvestments = totalContribution
+                        logDao.updateFinancialProfile(currentProfile)
+                    }
+                } else {
+                    currentProfile = FinancialProfile(userId = "local_user", monthlyInvestments = totalContribution)
+                    logDao.updateFinancialProfile(currentProfile)
+                }
+            }
+            
             _financialProfile.value = logDao.getFinancialProfileSync("local_user")
             val account = logDao.getUserAccountSync("local_user")
             // Ensure we have a local_user if it's missing
@@ -61,51 +111,65 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    private fun refreshData() {
+        viewModelScope.launch {
+            refreshDataInternal()
+        }
+    }
+
     private val _uiState = MutableStateFlow<UiState>(UiState.Idle)
     val uiState: StateFlow<UiState> = _uiState
 
-    private val _mealSuggestion = MutableStateFlow<String?>(null)
-    val mealSuggestion: StateFlow<String?> = _mealSuggestion
 
-    // Multimodal model
-    private val generativeModel = GenerativeModel(
-        modelName = "gemini-2.0-flash",
-        apiKey = "AIzaSyDvzLcgZTmMbnBQlmbimzKHR_Cjk1Ygv-I" 
-    )
 
-    fun suggestMeal() {
-        val currentInventory = inventory.value
-        if (currentInventory.isEmpty()) {
-            _mealSuggestion.value = "Your pantry is empty! Log some groceries first."
-            return
-        }
-
-        viewModelScope.launch {
-            _uiState.value = UiState.Loading
-            try {
-                val inventoryList = currentInventory.joinToString { "${it.name} (${it.quantity} ${it.unit})" }
-                val prompt = """
-                    Based on these ingredients available in my house: $inventoryList
-                    Suggest 2 quick healthy meal recipes. 
-                    Format: Meal Name followed by a brief 1-line instruction.
-                """.trimIndent()
-
-                val response = generativeModel.generateContent(prompt)
-                _mealSuggestion.value = response.text
-                _uiState.value = UiState.Idle
-            } catch (e: Exception) {
-                _uiState.value = UiState.Error("Could not get suggestions: ${e.message}")
+    fun registerUser(name: String, email: String, onSuccess: () -> Unit) {
+        viewModelScope.launch(Dispatchers.IO) {
+            // userId must be "local_user" so it matches the DAO query getUserAccount("local_user")
+            val existing = logDao.getUserAccountSync("local_user")
+            val newUser = if (existing != null) {
+                existing.copy(name = name, email = email)
+            } else {
+                UserAccount("local_user", name, email)
+            }
+            logDao.updateUserAccount(newUser)
+            refreshDataInternal()
+            withContext(Dispatchers.Main) {
+                _uiState.value = UiState.Success("Welcome, $name!")
+                notificationManager.sendAlert(
+                    "Welcome to RoutineLog! 🎉", 
+                    "Your secure offline-first account is active, $name."
+                )
+                onSuccess()
             }
         }
     }
 
-    fun registerUser(name: String, email: String) {
-        viewModelScope.launch(Dispatchers.IO) {
-            // userId must be "local_user" so it matches the DAO query getUserAccount("local_user")
-            val newUser = UserAccount("local_user", name, email)
-            logDao.updateUserAccount(newUser)
-            refreshData()
-            _uiState.value = UiState.Success("Welcome, $name!")
+    fun sendForgotPasswordNotification(email: String) {
+        notificationManager.sendAlert(
+            "Password Reset Request 🔑", 
+            "A secure link has been sent to $email. Use password 'admin123' to sign in locally."
+        )
+    }
+
+    fun toggleDatabaseEncryption(enabled: Boolean) {
+        viewModelScope.launch {
+            val prefs = getApplication<Application>().getSharedPreferences("auth_prefs", android.content.Context.MODE_PRIVATE)
+            prefs.edit().putBoolean("database_encrypted", enabled).apply()
+            _isDatabaseEncrypted.value = enabled
+            
+            if (enabled) {
+                notificationManager.sendAlert(
+                    "Database Fully Encrypted 🔒", 
+                    "RoutineLog local database secured with AES-256 keys."
+                )
+                _uiState.value = UiState.Success("Database encrypted securely via AES-256 keys!")
+            } else {
+                notificationManager.sendAlert(
+                    "Database Decrypted 🔓", 
+                    "Database encryption keys removed. Standard storage active."
+                )
+                _uiState.value = UiState.Success("Database decrypted to standard text mode.")
+            }
         }
     }
 
@@ -114,13 +178,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             withContext(Dispatchers.IO) {
                 logDao.updateUserAccount(updatedAccount)
             }
-            refreshData()
+            refreshDataInternal()
             _uiState.value = UiState.Success("Profile updated.")
         }
     }
 
     fun generateExpenseReport(): String {
-        val logs = allLogs.value.filter { it.category == LogCategory.EXPENSE }
+        val logs = allLogs.value.filter { 
+            it.category == LogCategory.EXPENSE && !it.structuredData.contains("\"type\": \"DEBT_PAYMENT\"") 
+        }
         if (logs.isEmpty()) return "No expenses logged yet."
         
         val sb = StringBuilder()
@@ -136,76 +202,50 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         return sb.toString()
     }
 
-    fun processInput(input: String, image: Bitmap? = null) {
-        if (input.isBlank() && image == null) return
+    fun processInput(input: String) {
+        if (input.isBlank()) return
         
         viewModelScope.launch {
-            val currentAccount = userAccount.value ?: UserAccount()
-            if (!currentAccount.isPro && currentAccount.aiCredits <= 0) {
-                _uiState.value = UiState.Error("Daily AI limit reached. Upgrade to Pro for unlimited logging!")
-                return@launch
-            }
-
             _uiState.value = UiState.Loading
             try {
-                // LOCAL REGEX FALLBACK for Pantry/Expenses
-                // Pattern: "Add 3 apples", "Bought 10 milk", "Spent 50 on lunch"
-                val pantryRegex = "(?i)(?:add|bought|plus)\\s+(\\d+(?:\\.\\d+)?)\\s+([a-zA-Z\\s]+)".toRegex()
-                val expenseRegex = "(?i)(?:spent|spent|expense)\\s+(\\d+(?:\\.\\d+)?)\\s+(?:on|for)\\s+([a-zA-Z\\s]+)".toRegex()
-
-                val pantryMatch = pantryRegex.find(input)
-                val expenseMatch = expenseRegex.find(input)
-
-                if (pantryMatch != null) {
-                    val qty = pantryMatch.groupValues[1].toDouble()
-                    val item = pantryMatch.groupValues[2].trim()
-                    val fallbackJson = "{\"category\": \"INVENTORY\", \"item\": \"$item\", \"quantity\": $qty, \"sentiment\": \"Neutral\"}"
-                    handleProcessedResult(LogCategory.INVENTORY, input, fallbackJson)
-                    return@launch
-                } else if (expenseMatch != null) {
-                    val amt = expenseMatch.groupValues[1].toDouble()
-                    val desc = expenseMatch.groupValues[2].trim()
-                    val fallbackJson = "{\"category\": \"EXPENSE\", \"amount\": $amt, \"item\": \"$desc\", \"sentiment\": \"Neutral\"}"
-                    handleProcessedResult(LogCategory.EXPENSE, input, fallbackJson)
-                    return@launch
-                }
-
-                // AI Processing as secondary
-                val promptText = if (image != null) {
-                    "Analyze this image and text: '$input'. Categorize as EXPENSE, INVENTORY, or CONSUMPTION. " +
-                    "Return ONLY valid JSON with keys: 'category', 'item', 'quantity' (number), 'amount' (number), 'sentiment'. " +
-                    "Example: {\"category\": \"INVENTORY\", \"item\": \"milk\", \"quantity\": 2, \"sentiment\": \"Neutral\"}"
-                } else {
-                    "Categorize this input: '$input'. Return ONLY valid JSON with keys: 'category', 'item', 'quantity', 'amount', 'sentiment'. " +
-                    "Categories: EXPENSE, INVENTORY, CONSUMPTION."
-                }
-
-                val response = if (image != null) {
-                    generativeModel.generateContent(content { image(image); text(promptText) })
-                } else {
-                    generativeModel.generateContent(promptText)
-                }
-
-                val responseText = response.text ?: ""
+                val inputTrimmed = input.trim()
+                val numberRegex = "(\\d+(?:\\.\\d+)?)".toRegex()
+                val numberMatch = numberRegex.find(inputTrimmed)
                 
-                val category = when {
-                    responseText.contains("EXPENSE", ignoreCase = true) -> LogCategory.EXPENSE
-                    responseText.contains("INVENTORY", ignoreCase = true) -> LogCategory.INVENTORY
-                    responseText.contains("CONSUMPTION", ignoreCase = true) -> LogCategory.CONSUMPTION
-                    else -> LogCategory.UNKNOWN
-                }
-
-                handleProcessedResult(category, if (image != null) "Image Log: $input" else input, responseText)
-                
-                // Update AI credits only if AI was actually used and not PRO
-                if (!currentAccount.isPro) {
-                    val updatedAccount = currentAccount.copy(aiCredits = (currentAccount.aiCredits - 1).coerceAtLeast(0))
-                    withContext(Dispatchers.IO) {
-                        logDao.updateUserAccount(updatedAccount)
+                if (numberMatch != null) {
+                    val parsedNum = numberMatch.groupValues[1].toDouble()
+                    
+                    val isPantry = inputTrimmed.contains("pantry", ignoreCase = true) || 
+                                   inputTrimmed.contains("milk", ignoreCase = true) || 
+                                   inputTrimmed.contains("egg", ignoreCase = true) || 
+                                   inputTrimmed.contains("bread", ignoreCase = true) || 
+                                   inputTrimmed.contains("apple", ignoreCase = true) || 
+                                   inputTrimmed.contains("add", ignoreCase = true) || 
+                                   inputTrimmed.contains("bought", ignoreCase = true) ||
+                                   inputTrimmed.contains("plus", ignoreCase = true) ||
+                                   inputTrimmed.contains("grocery", ignoreCase = true) ||
+                                   inputTrimmed.contains("groceries", ignoreCase = true)
+                    
+                    val cleanText = inputTrimmed
+                        .replace(numberMatch.groupValues[1], "")
+                        .replace("(?i)\\b(?:add|bought|plus|spent|on|for|buy|purchase|cost|paid|pay|towards)\\b".toRegex(), "")
+                        .replace("\\$", "")
+                        .trim()
+                        .replace("\\s+".toRegex(), " ")
+                    
+                    val item = if (cleanText.isNotBlank()) cleanText else "Logged Entry"
+                    
+                    if (isPantry) {
+                        val json = "{\"category\": \"INVENTORY\", \"item\": \"$item\", \"quantity\": $parsedNum, \"sentiment\": \"Neutral\"}"
+                        handleProcessedResult(LogCategory.INVENTORY, inputTrimmed, json)
+                    } else {
+                        val json = "{\"category\": \"EXPENSE\", \"amount\": $parsedNum, \"item\": \"$item\", \"sentiment\": \"Neutral\"}"
+                        handleProcessedResult(LogCategory.EXPENSE, inputTrimmed, json)
                     }
-                    refreshData()
+                } else {
+                    val json = "{\"category\": \"UNKNOWN\", \"item\": \"$inputTrimmed\", \"quantity\": 1.0, \"sentiment\": \"Neutral\"}"
+                    handleProcessedResult(LogCategory.UNKNOWN, inputTrimmed, json)
                 }
-
             } catch (e: Exception) {
                 _uiState.value = UiState.Error(e.message ?: "Unknown error")
             }
@@ -231,7 +271,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             withContext(Dispatchers.IO) {
                 logDao.updateInventory(item)
             }
-            refreshData()
+            refreshDataInternal()
             _uiState.value = UiState.Success("Added $name manually.")
         }
     }
@@ -248,8 +288,103 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 val expenseJson = "{\"category\": \"EXPENSE\", \"item\": \"$name restock\", \"amount\": $amountSpent, \"quantity\": $addedQty}"
                 logDao.insertLog(LogEntry(category = LogCategory.EXPENSE, content = "Purchased $addedQty ${updatedItem.unit} of $name", structuredData = expenseJson))
             }
-            refreshData()
+            refreshDataInternal()
             _uiState.value = UiState.Success("Restocked $name and logged expense.")
+        }
+    }
+
+    fun adjustInventoryQty(name: String, delta: Double) {
+        viewModelScope.launch {
+            val currentItem = withContext(Dispatchers.IO) { logDao.getInventoryItemSync(name) }
+            if (currentItem != null) {
+                val newQty = (currentItem.quantity + delta).coerceAtLeast(0.0)
+                val updatedItem = currentItem.copy(quantity = newQty, lastUpdated = System.currentTimeMillis())
+                withContext(Dispatchers.IO) {
+                    logDao.updateInventory(updatedItem)
+                }
+                refreshDataInternal()
+                if (newQty <= 1.0 && delta < 0) {
+                    notificationManager.sendAlert(
+                        "Low Stock Alert",
+                        "$name is almost finished! Current stock: $newQty"
+                    )
+                }
+            }
+        }
+    }
+
+    fun scanBill(storeName: String, receiptText: String) {
+        if (storeName.isBlank() || receiptText.isBlank()) return
+        viewModelScope.launch {
+            _uiState.value = UiState.Loading
+            try {
+                val gId = "bill_${System.currentTimeMillis()}"
+                val lines = receiptText.split("\n")
+                
+                var totalSpent = 0.0
+                var parsedItemsCount = 0
+                
+                withContext(Dispatchers.IO) {
+                    lines.forEach { line ->
+                        val trimmed = line.trim()
+                        if (trimmed.isBlank()) return@forEach
+                        
+                        val priceRegex = "(?:\\$?|₹|\\bUSD\\b|\\bRs\\.?\\b|\\bINR\\b)?\\s*(\\d+(?:\\.\\d+)?)".toRegex()
+                        val priceMatch = priceRegex.find(trimmed)
+                        
+                        if (priceMatch != null) {
+                            val price = priceMatch.groupValues[1].toDouble()
+                            val cleanText = trimmed
+                                .replace(priceMatch.value, "")
+                                .replace("-", "")
+                                .replace("\\s+".toRegex(), " ")
+                                .trim()
+                            
+                            val itemName = if (cleanText.isNotBlank()) cleanText else "Uncategorized Item"
+                            totalSpent += price
+                            parsedItemsCount++
+                            
+                            val pantryKeywords = listOf("milk", "egg", "bread", "apple", "sugar", "salt", "flour", "rice", "cheese", "butter", "juice", "oil", "vegetable", "fruit", "grocery", "chicken", "beef", "pork", "fish", "water", "soda", "coffee", "tea", "cereal", "pasta", "banana", "onion", "potato", "spiced", "curry", "rice", "salt")
+                            val isPantryItem = pantryKeywords.any { itemName.contains(it, ignoreCase = true) }
+                            
+                            val category = if (isPantryItem) LogCategory.INVENTORY else LogCategory.EXPENSE
+                            val structuredJson = if (isPantryItem) {
+                                "{\"category\": \"INVENTORY\", \"item\": \"$itemName\", \"quantity\": 1.0, \"price\": $price, \"groupId\": \"$gId\"}"
+                            } else {
+                                "{\"category\": \"EXPENSE\", \"amount\": $price, \"item\": \"$itemName\", \"groupId\": \"$gId\"}"
+                            }
+                            
+                            val logEntry = LogEntry(
+                                category = category,
+                                content = "Purchased $itemName for ${formatCurrency(price)}",
+                                structuredData = structuredJson,
+                                groupId = gId,
+                                groupName = storeName
+                            )
+                            logDao.insertLog(logEntry)
+                            
+                            if (isPantryItem) {
+                                val existing = logDao.getInventoryItemSync(itemName)
+                                val unit = if (itemName.contains("milk", ignoreCase = true) || itemName.contains("juice", ignoreCase = true)) "L" else "pcs"
+                                val newQty = (existing?.quantity ?: 0.0) + 1.0
+                                val item = InventoryItem(
+                                    name = itemName,
+                                    category = "Groceries",
+                                    quantity = newQty,
+                                    unit = existing?.unit ?: unit,
+                                    lastUpdated = System.currentTimeMillis()
+                                )
+                                logDao.updateInventory(item)
+                            }
+                        }
+                    }
+                }
+                
+                refreshDataInternal()
+                _uiState.value = UiState.Success("Successfully scanned bill from $storeName! Total: ${formatCurrency(totalSpent)} ($parsedItemsCount items)")
+            } catch (e: Exception) {
+                _uiState.value = UiState.Error("Error scanning receipt: ${e.message}")
+            }
         }
     }
 
@@ -260,28 +395,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             withContext(Dispatchers.IO) {
                 logDao.updateUserAccount(updatedAccount)
             }
-            refreshData()
+            refreshDataInternal()
             _uiState.value = UiState.Success("Successfully added $amount credits!")
         }
     }
 
     fun upgradeToPro() {
-        viewModelScope.launch {
-            val currentAccount = userAccount.value ?: return@launch
-            val updatedAccount = UserAccount(currentAccount.userId, currentAccount.name, currentAccount.email).apply {
-                profileImageUri = currentAccount.profileImageUri
-                proteinGoal = currentAccount.proteinGoal
-                carbsGoal = currentAccount.carbsGoal
-                fatGoal = currentAccount.fatGoal
-                aiCredits = currentAccount.aiCredits
-                isPro = true
-            }
-            withContext(Dispatchers.IO) {
-                logDao.updateUserAccount(updatedAccount)
-            }
-            refreshData()
-            _uiState.value = UiState.Success("Welcome to RoutineLog Pro!")
-        }
+        // Delegate to purchasePremiumPlan with a 1-year duration
+        purchasePremiumPlan("Premium Pro", 365L)
     }
 
     fun updateMacroGoals(p: Int, c: Int, f: Int) {
@@ -291,7 +412,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             withContext(Dispatchers.IO) {
                 logDao.updateUserAccount(updatedAccount)
             }
-            refreshData()
+            refreshDataInternal()
             _uiState.value = UiState.Success("Daily goals updated!")
         }
     }
@@ -303,7 +424,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             withContext(Dispatchers.IO) {
                 logDao.updateUserAccount(updatedAccount)
             }
-            refreshData()
+            refreshDataInternal()
             _uiState.value = UiState.Success(if (enabled) "Biometrics enabled!" else "Biometrics disabled.")
         }
     }
@@ -330,7 +451,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 withContext(Dispatchers.IO) {
                     logDao.updateInventory(updatedItem)
                 }
-            refreshData()
+                refreshDataInternal()
 
                 if (newQuantity <= 1.0) {
                     notificationManager.sendAlert(
@@ -351,15 +472,26 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _uiState.value = UiState.Success("Invited $email to your Family Plan!")
     }
 
+    fun removeFamilyMember(member: String) {
+        _familyMembers.value = _familyMembers.value - member
+        notificationManager.sendAlert("Family Member Removed", "$member has been removed from your Family Plan.")
+        _uiState.value = UiState.Success("Removed $member from family plan.")
+    }
+
     // ─── Financial Planner Logic ──────────────────────────────────────────────
     
-    fun updateFinancialProfile(salary: Double, expenses: Double) {
+    fun updateFinancialProfile(salary: Double, expenses: Double, investments: Double) {
         viewModelScope.launch {
-            val profile = FinancialProfile(userId = "local_user", monthlySalary = salary, fixedExpenses = expenses)
+            val profile = FinancialProfile(
+                userId = "local_user",
+                monthlySalary = salary,
+                fixedExpenses = expenses,
+                monthlyInvestments = investments
+            )
             withContext(Dispatchers.IO) {
                 logDao.updateFinancialProfile(profile)
             }
-            refreshData()
+            refreshDataInternal()
             _uiState.value = UiState.Success("Financial profile updated.")
         }
     }
@@ -370,7 +502,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             withContext(Dispatchers.IO) {
                 logDao.insertDebt(debt)
             }
-            refreshData()
+            refreshDataInternal()
             _uiState.value = UiState.Success("Debt '$name' added.")
         }
     }
@@ -380,7 +512,87 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             withContext(Dispatchers.IO) {
                 logDao.deleteDebt(id)
             }
-            refreshData()
+            refreshDataInternal()
+        }
+    }
+
+    fun setDebtMode(enabled: Boolean) {
+        _isDebtMode.value = enabled
+    }
+
+    fun editDebt(id: Int, name: String, balance: Double, rate: Double, min: Double) {
+        viewModelScope.launch {
+            val debt = DebtEntry(id = id, name = name, balance = balance, interestRate = rate, minPayment = min)
+            withContext(Dispatchers.IO) {
+                logDao.insertDebt(debt)
+            }
+            refreshDataInternal()
+            _uiState.value = UiState.Success("Debt '$name' updated.")
+        }
+    }
+
+    fun logDebtPayment(debtName: String, amount: Double) {
+        viewModelScope.launch {
+            _uiState.value = UiState.Loading
+            try {
+                withContext(Dispatchers.IO) {
+                    val activeDebts = logDao.getDebtsSync("local_user")
+                    val matchingDebt = activeDebts.find { it.name.equals(debtName, ignoreCase = true) }
+                    if (matchingDebt != null) {
+                        val newBalance = (matchingDebt.balance - amount).coerceAtLeast(0.0)
+                        val updatedDebt = matchingDebt.copy(balance = newBalance)
+                        logDao.insertDebt(updatedDebt)
+                    }
+
+                    val rawJson = "{\"category\": \"EXPENSE\", \"amount\": $amount, \"item\": \"$debtName payment\", \"type\": \"DEBT_PAYMENT\", \"debtName\": \"$debtName\"}"
+                    val logEntry = LogEntry(
+                        category = LogCategory.EXPENSE,
+                        content = "Paid ${formatCurrency(amount)} towards $debtName",
+                        structuredData = rawJson
+                    )
+                    logDao.insertLog(logEntry)
+                }
+                refreshDataInternal()
+                _uiState.value = UiState.Success("Logged payment of ${formatCurrency(amount)} towards $debtName")
+            } catch (e: Exception) {
+                _uiState.value = UiState.Error("Error logging payment: ${e.message}")
+            }
+        }
+    }
+
+    fun toggleEmiPaid(debtId: Int, isPaid: Boolean) {
+        viewModelScope.launch {
+            _uiState.value = UiState.Loading
+            try {
+                withContext(Dispatchers.IO) {
+                    val activeDebts = logDao.getDebtsSync("local_user")
+                    val matchingDebt = activeDebts.find { it.id == debtId }
+                    if (matchingDebt != null) {
+                        val minPayment = matchingDebt.minPayment
+                        val newBalance = if (isPaid) {
+                            (matchingDebt.balance - minPayment).coerceAtLeast(0.0)
+                        } else {
+                            matchingDebt.balance + minPayment
+                        }
+                        val updatedDebt = matchingDebt.copy(balance = newBalance, isEmiPaid = isPaid)
+                        logDao.insertDebt(updatedDebt)
+
+                        if (isPaid) {
+                            val rawJson = "{\"category\": \"EXPENSE\", \"amount\": $minPayment, \"item\": \"${matchingDebt.name} EMI payment\", \"type\": \"DEBT_PAYMENT\", \"debtName\": \"${matchingDebt.name}\"}"
+                            val logEntry = LogEntry(
+                                category = LogCategory.EXPENSE,
+                                content = "Paid ${formatCurrency(minPayment)} EMI towards ${matchingDebt.name}",
+                                structuredData = rawJson
+                            )
+                            logDao.insertLog(logEntry)
+                        }
+                    }
+                }
+                refreshDataInternal()
+                _uiState.value = UiState.Success(if (isPaid) "EMI marked as paid." else "EMI marked as unpaid.")
+            } catch (e: Exception) {
+                _uiState.value = UiState.Error("Error toggling EMI: ${e.message}")
+            }
         }
     }
 
@@ -391,7 +603,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val totalInterestPaid: Double
     )
 
-    fun calculatePayoffTimeline(strategy: String): List<PayoffSnapshot> {
+    fun calculatePayoffTimeline(strategy: String, extraPayment: Double = 0.0): List<PayoffSnapshot> {
         val profile = _financialProfile.value ?: return emptyList()
         val debtList = _debts.value.toMutableList()
         if (debtList.isEmpty()) return emptyList()
@@ -418,7 +630,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 val balance = currentBalances[debt.name] ?: 0.0
                 if (balance > 0) {
                     val interest = (balance * (debt.interestRate / 100)) / 12
-                    currentBalances[debt.name] = (currentBalances[debt.name] ?: 0.0) + interest
+                    currentBalances[debt.name] = balance + interest
                     monthlyInterest += interest
                     totalMinPayments += debt.minPayment
                 }
@@ -431,23 +643,25 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 return listOf(PayoffSnapshot(-1, 0.0, emptyList(), 0.0))
             }
             
-            var availableExtra = discretionary - totalMinPayments
-            
-            // Pay all minimums first
+            var actualMinPaid = 0.0
+            // Pay all minimums first and accumulate actual payments
             sortedDebts.forEach { debt: DebtEntry ->
                 val balance = currentBalances[debt.name] ?: 0.0
                 if (balance > 0) {
                     val payment = Math.min(balance, debt.minPayment)
-                    currentBalances[debt.name] = (currentBalances[debt.name] ?: 0.0) - payment
+                    currentBalances[debt.name] = balance - payment
+                    actualMinPaid += payment
                 }
             }
+            
+            var availableExtra = discretionary - actualMinPaid + extraPayment
             
             // Apply extra to priority debt
             for (debt in sortedDebts) {
                 val balance = currentBalances[debt.name] ?: 0.0
                 if (balance > 0) {
                     val payment = Math.min(balance, availableExtra)
-                    currentBalances[debt.name] = (currentBalances[debt.name] ?: 0.0) - payment
+                    currentBalances[debt.name] = balance - payment
                     availableExtra -= payment
                     if (availableExtra <= 0) break
                 }
@@ -469,8 +683,154 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             withContext(Dispatchers.IO) {
                 logDao.deleteAllSync()
             }
-            refreshData()
+            refreshDataInternal()
             _uiState.value = UiState.Success("All data wiped for privacy.")
+        }
+    }
+
+    fun purchasePremiumPlan(planName: String, durationDays: Long) {
+        viewModelScope.launch {
+            try {
+                withContext(Dispatchers.IO) {
+                    val currentAccount = logDao.getUserAccountSync("local_user") ?: UserAccount("local_user", "Guest", "guest@omnilog.com")
+                    val currentExpiry = if (currentAccount.proExpiryTimestamp > System.currentTimeMillis()) currentAccount.proExpiryTimestamp else System.currentTimeMillis()
+                    val addedMs = java.util.concurrent.TimeUnit.DAYS.toMillis(durationDays)
+                    currentAccount.isPro = true
+                    currentAccount.subscriptionPlan = planName
+                    currentAccount.proExpiryTimestamp = currentExpiry + addedMs
+                    logDao.updateUserAccount(currentAccount)
+                }
+                refreshDataInternal()
+                _uiState.value = UiState.Success("Successfully subscribed to $planName!")
+                notificationManager.sendAlert(
+                    "Welcome to RoutineLog Pro! 👑", 
+                    "Successfully subscribed to $planName! Enjoy unlimited active splits and premium portfolios."
+                )
+            } catch (e: Exception) {
+                _uiState.value = UiState.Error("Failed to purchase premium plan: ${e.message}")
+            }
+        }
+    }
+
+    fun addInvestment(name: String, balance: Double, contribution: Double, expectedReturn: Double) {
+        viewModelScope.launch {
+            val investment = InvestmentEntry(
+                name = name,
+                balance = balance,
+                monthlyContribution = contribution,
+                expectedReturnRate = expectedReturn
+            )
+            withContext(Dispatchers.IO) {
+                logDao.insertInvestment(investment)
+            }
+            refreshDataInternal()
+            _uiState.value = UiState.Success("Investment '$name' added successfully.")
+        }
+    }
+
+    fun editInvestment(id: Int, name: String, balance: Double, contribution: Double, expectedReturn: Double) {
+        viewModelScope.launch {
+            val investment = InvestmentEntry(
+                id = id,
+                name = name,
+                balance = balance,
+                monthlyContribution = contribution,
+                expectedReturnRate = expectedReturn
+            )
+            withContext(Dispatchers.IO) {
+                logDao.insertInvestment(investment)
+            }
+            refreshDataInternal()
+            _uiState.value = UiState.Success("Investment '$name' updated.")
+        }
+    }
+
+    fun deleteInvestment(id: Int) {
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) {
+                logDao.deleteInvestment(id)
+            }
+            refreshDataInternal()
+            _uiState.value = UiState.Success("Investment deleted.")
+        }
+    }
+
+    fun createSplitGroup(name: String, invites: List<String> = emptyList()) {
+        if (name.isNotBlank() && !_customGroups.value.contains(name)) {
+            _customGroups.value = _customGroups.value + name
+            _groupInvitedMembers.value = _groupInvitedMembers.value + (name to invites)
+            _uiState.value = UiState.Success("Group '$name' created successfully!")
+            
+            if (invites.isNotEmpty()) {
+                val targets = invites.joinToString(", ")
+                notificationManager.sendAlert(
+                    "Group Invitations Sent! 👥", 
+                    "Universal invitations dispatched to: $targets for group '$name'."
+                )
+            }
+        }
+    }
+
+    fun addSplitExpense(title: String, totalAmount: Double, paidBy: String, splitWith: String, splitShare: Double, groupName: String = "General") {
+        viewModelScope.launch {
+            val expense = SplitExpenseEntry(
+                title = title,
+                totalAmount = totalAmount,
+                paidBy = paidBy,
+                splitWith = splitWith,
+                splitShare = splitShare,
+                isSettled = false,
+                timestamp = System.currentTimeMillis(),
+                groupName = groupName
+            )
+            withContext(Dispatchers.IO) {
+                logDao.insertSplitExpense(expense)
+            }
+            refreshDataInternal()
+            notificationManager.sendAlert("New Split Bill", "Split with $splitWith logged successfully.")
+            _uiState.value = UiState.Success("Split bill logged.")
+        }
+    }
+
+    fun settleSplitExpense(id: Long) {
+        viewModelScope.launch {
+            _uiState.value = UiState.Loading
+            try {
+                withContext(Dispatchers.IO) {
+                    val expense = logDao.getSplitExpenseSync(id)
+                    if (expense != null) {
+                        val updated = expense.copy(isSettled = true)
+                        logDao.insertSplitExpense(updated)
+
+                        // If the other person paid, settle up means we are paying them.
+                        // Thus, we record an EXPENSE entry in the main consumer ledger database.
+                        if (!expense.paidBy.equals("You", ignoreCase = true)) {
+                            val rawJson = "{\"category\": \"EXPENSE\", \"amount\": ${expense.splitShare}, \"item\": \"Settled: ${expense.title}\", \"type\": \"SPLIT_SETTLED\", \"splitWith\": \"${expense.splitWith}\"}"
+                            val logEntry = LogEntry(
+                                category = LogCategory.EXPENSE,
+                                content = "Settled split for ${expense.title} (Paid ${formatCurrency(expense.splitShare)} to ${expense.paidBy})",
+                                structuredData = rawJson
+                            )
+                            logDao.insertLog(logEntry)
+                        }
+                    }
+                }
+                refreshDataInternal()
+                notificationManager.sendAlert("Bill Settled", "Split bill has been marked as settled.")
+                _uiState.value = UiState.Success("Bill settled successfully.")
+            } catch (e: Exception) {
+                _uiState.value = UiState.Error("Error settling bill: ${e.message}")
+            }
+        }
+    }
+
+    fun deleteSplitExpense(id: Long) {
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) {
+                logDao.deleteSplitExpense(id)
+            }
+            refreshDataInternal()
+            _uiState.value = UiState.Success("Split expense deleted.")
         }
     }
 

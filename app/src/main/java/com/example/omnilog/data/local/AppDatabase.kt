@@ -7,7 +7,7 @@ import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 import com.example.omnilog.data.model.*
 
-@Database(entities = [LogEntry::class, InventoryItem::class, UserAccount::class, DebtEntry::class, FinancialProfile::class], version = 6, exportSchema = false)
+@Database(entities = [LogEntry::class, InventoryItem::class, UserAccount::class, DebtEntry::class, FinancialProfile::class, InvestmentEntry::class, SplitExpenseEntry::class], version = 12, exportSchema = false)
 @TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun logDao(): LogDao

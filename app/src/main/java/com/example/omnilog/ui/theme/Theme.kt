@@ -15,20 +15,33 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.unit.sp
 
 // ─── Deep Navy Brand Palette ─────────────────────────────────────────────────
-private val NavyDeep       = Color(0xFF0A0E1A)   // Background base
+private val NavyDeep       = Color(0xFF080D18)   // Background base — deeper for richer dark
 private val NavySurface    = Color(0xFF131929)   // Card surfaces
 private val NavyElevated   = Color(0xFF1C2438)   // Elevated surfaces
 
-private val BrandViolet    = Color(0xFF7C3AED)   // Primary – vivid violet
-private val BrandIndigo    = Color(0xFF6366F1)   // Secondary – indigo
-private val BrandCyan      = Color(0xFF06B6D4)   // Tertiary – cyan accent
-private val BrandAmber     = Color(0xFFF59E0B)   // Warning/highlight
-private val BrandRose      = Color(0xFFE11D48)   // Error / destructive
+val BrandViolet    = Color(0xFF7C3AED)   // Primary – vivid violet
+val BrandVioletText = Color(0xFFD8B4FE)   // Primary text highlight – bright purple for dark mode visibility
+val BrandIndigoText = Color(0xFFA5B4FC)   // Secondary text highlight – bright indigo for dark mode visibility
+val BrandIndigo    = Color(0xFF6366F1)   // Secondary – indigo
+val BrandCyan      = Color(0xFF06B6D4)   // Tertiary – cyan accent
+val BrandAmber     = Color(0xFFF59E0B)   // Warning/highlight
+val BrandRose      = Color(0xFFE11D48)   // Error / destructive
+
+// ─── Extended Premium Palette ────────────────────────────────────────────────
+val BrandGold              = Color(0xFFFFBB00)   // Pro/premium gold accent
+val BrandEmerald           = Color(0xFF10B981)   // Success / positive state
+val BrandGradientStart     = Color(0xFF7C3AED)   // Gradient: primary end
+val BrandGradientEnd       = Color(0xFF06B6D4)   // Gradient: tertiary end
+val BrandGradientMid       = Color(0xFF6366F1)   // Gradient: middle
 
 private val OnBrand        = Color(0xFFFFFFFF)
 private val TextPrimary    = Color(0xFFF1F5F9)   // Slate 100
 private val TextSecondary  = Color(0xFF94A3B8)   // Slate 400
 private val TextMuted      = Color(0xFF475569)   // Slate 600
+
+// Brightened text variants for Dark Theme accessibility
+private val TextSecondaryDark = Color(0xFFE2E8F0)   // Slate 200
+private val TextMutedDark      = Color(0xFFCBD5E1)   // Slate 300
 
 // ─── Light surface palette ────────────────────────────────────────────────────
 private val LightBg        = Color(0xFFF8FAFF)
@@ -62,9 +75,9 @@ private val DarkColorScheme = darkColorScheme(
     surface              = NavySurface,
     onSurface            = TextPrimary,
     surfaceVariant       = NavyElevated,
-    onSurfaceVariant     = TextSecondary,
+    onSurfaceVariant     = TextSecondaryDark,
 
-    outline              = TextMuted,
+    outline              = TextMutedDark,
     outlineVariant       = Color(0xFF2D3748),
 )
 

@@ -15,5 +15,7 @@ data class UserAccount(
     var profileImageUri: String? = null,
     var proteinGoal: Int = 150,
     var carbsGoal: Int = 200,
-    var fatGoal: Int = 70
+    var fatGoal: Int = 70,
+    var subscriptionPlan: String? = null,
+    var proExpiryTimestamp: Long = 0L
 )

@@ -45,4 +45,26 @@ interface LogDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     fun updateFinancialProfile(profile: FinancialProfile)
+
+    @Query("SELECT * FROM investments WHERE userId = :userId")
+    fun getInvestmentsSync(userId: String): List<InvestmentEntry>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    fun insertInvestment(investment: InvestmentEntry)
+
+    @Query("DELETE FROM investments WHERE id = :investmentId")
+    fun deleteInvestment(investmentId: Int)
+
+    // Split Expense Methods
+    @Query("SELECT * FROM split_expenses ORDER BY timestamp DESC")
+    fun getAllSplitExpensesSync(): List<SplitExpenseEntry>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    fun insertSplitExpense(expense: SplitExpenseEntry)
+
+    @Query("DELETE FROM split_expenses WHERE id = :id")
+    fun deleteSplitExpense(id: Long)
+
+    @Query("SELECT * FROM split_expenses WHERE id = :id LIMIT 1")
+    fun getSplitExpenseSync(id: Long): SplitExpenseEntry?
 }

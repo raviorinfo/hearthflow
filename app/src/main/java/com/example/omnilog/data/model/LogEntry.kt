@@ -10,5 +10,8 @@ data class LogEntry(
     var category: LogCategory = LogCategory.GENERAL,
     var content: String = "",
     var structuredData: String = "{}",
-    var timestamp: Long = System.currentTimeMillis()
+    var timestamp: Long = System.currentTimeMillis(),
+    var groupId: String? = null,
+    var groupName: String? = null
 )
+
