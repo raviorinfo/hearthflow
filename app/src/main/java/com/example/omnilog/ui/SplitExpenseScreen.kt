@@ -83,500 +83,517 @@ fun SplitExpenseScreen(viewModel: MainViewModel) {
     Box(modifier = Modifier.fillMaxSize()) {
         AnimatedBackground()
 
-        Column(
+        LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 100.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+                .padding(horizontal = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+            contentPadding = PaddingValues(top = 16.dp, bottom = 100.dp)
         ) {
             // Title & Add Trigger
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column {
-                    GradientText(
-                        text = "Split Ledger",
-                        style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold)
-                    )
-                    Text(
-                        text = "Manage shared family expenses",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.outline
-                    )
-                }
-
-                Button(
-                    onClick = {
-                        if (!isPremiumActive && totalActiveExpensesCount >= 2) {
-                            showPremiumDialog = true
-                        } else {
-                            showAddSplitDialog = true
-                        }
-                    },
-                    shape = RoundedCornerShape(14.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = BrandViolet),
-                    modifier = Modifier.pressScale()
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(Icons.Default.Add, null, modifier = Modifier.size(16.dp))
-                    Spacer(Modifier.width(4.dp))
-                    Text("Add Split", fontWeight = FontWeight.Bold)
+                    Column {
+                        GradientText(
+                            text = "Split Ledger",
+                            style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold)
+                        )
+                        Text(
+                            text = "Manage shared family expenses",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.outline
+                        )
+                    }
+
+                    Button(
+                        onClick = {
+                            if (!isPremiumActive && totalActiveExpensesCount >= 2) {
+                                showPremiumDialog = true
+                            } else {
+                                showAddSplitDialog = true
+                            }
+                        },
+                        shape = RoundedCornerShape(14.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = BrandViolet),
+                        modifier = Modifier.pressScale()
+                    ) {
+                        Icon(Icons.Default.Add, null, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text("Add Split", fontWeight = FontWeight.Bold)
+                    }
                 }
             }
 
             // 👑 Premium Expiry Countdown Banner (dark-mode safe)
             if (isPremiumActive) {
-                userAccount?.let { account ->
-                    val daysLeft = ((account.proExpiryTimestamp - System.currentTimeMillis()) / (1000L * 60L * 60L * 24L)).coerceAtLeast(0L)
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(14.dp))
-                            .background(
-                                Brush.horizontalGradient(
-                                    listOf(Color(0xFF1E1A08), Color(0xFF2A2210))
+                item {
+                    userAccount?.let { account ->
+                        val daysLeft = ((account.proExpiryTimestamp - System.currentTimeMillis()) / (1000L * 60L * 60L * 24L)).coerceAtLeast(0L)
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(
+                                    Brush.horizontalGradient(
+                                        listOf(Color(0xFF1E1A08), Color(0xFF2A2210))
+                                    )
                                 )
-                            )
-                            .border(
-                                width = 1.dp,
-                                brush = Brush.horizontalGradient(
-                                    listOf(Color(0xFFFFD700).copy(alpha = 0.8f), BrandAmber.copy(alpha = 0.5f), Color(0xFFFFD700).copy(alpha = 0.8f))
-                                ),
-                                shape = RoundedCornerShape(14.dp)
-                            )
-                            .padding(horizontal = 14.dp, vertical = 10.dp)
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            modifier = Modifier.fillMaxWidth()
+                                .border(
+                                    width = 1.dp,
+                                    brush = Brush.horizontalGradient(
+                                        listOf(Color(0xFFFFD700).copy(alpha = 0.8f), BrandAmber.copy(alpha = 0.5f), Color(0xFFFFD700).copy(alpha = 0.8f))
+                                    ),
+                                    shape = RoundedCornerShape(14.dp)
+                                )
+                                .padding(horizontal = 14.dp, vertical = 10.dp)
                         ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text("👑", fontSize = 18.sp)
-                                Spacer(Modifier.width(10.dp))
-                                Column {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text("👑", fontSize = 18.sp)
+                                    Spacer(Modifier.width(10.dp))
+                                    Column {
+                                        Text(
+                                            text = account.subscriptionPlan?.ifBlank { "Premium Active" } ?: "Premium Active",
+                                            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                                            color = Color(0xFFFFD700)
+                                        )
+                                        Text(
+                                            text = "$daysLeft days remaining · Full access unlocked",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = Color(0xFFFFD700).copy(alpha = 0.65f)
+                                        )
+                                    }
+                                }
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(6.dp))
+                                        .background(Color(0xFFFFD700).copy(alpha = 0.15f))
+                                        .border(0.5.dp, Color(0xFFFFD700).copy(alpha = 0.5f), RoundedCornerShape(6.dp))
+                                        .padding(horizontal = 8.dp, vertical = 3.dp)
+                                ) {
                                     Text(
-                                        text = account.subscriptionPlan?.ifBlank { "Premium Active" } ?: "Premium Active",
-                                        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                                        text = "✓ Pro",
+                                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Black),
                                         color = Color(0xFFFFD700)
                                     )
-                                    Text(
-                                        text = "$daysLeft days remaining · Full access unlocked",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = Color(0xFFFFD700).copy(alpha = 0.65f)
-                                    )
                                 }
-                            }
-                            Box(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(6.dp))
-                                    .background(Color(0xFFFFD700).copy(alpha = 0.15f))
-                                    .border(0.5.dp, Color(0xFFFFD700).copy(alpha = 0.5f), RoundedCornerShape(6.dp))
-                                    .padding(horizontal = 8.dp, vertical = 3.dp)
-                            ) {
-                                Text(
-                                    text = "✓ Pro",
-                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Black),
-                                    color = Color(0xFFFFD700)
-                                )
                             }
                         }
                     }
                 }
             } else {
                 // Premium Upgrade Banner
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(
-                            Brush.horizontalGradient(
-                                listOf(BrandViolet.copy(alpha = 0.15f), BrandCyan.copy(alpha = 0.15f))
+                item {
+                    val premiumBannerBg = Brush.horizontalGradient(
+                        listOf(Color(0xFF1E1B4B), Color(0xFF0D1E3D))
+                    )
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(premiumBannerBg)
+                            .border(
+                                width = 1.dp,
+                                brush = Brush.horizontalGradient(listOf(BrandViolet, BrandCyan)),
+                                shape = RoundedCornerShape(16.dp)
                             )
-                        )
-                        .border(
-                            width = 1.dp,
-                            brush = Brush.horizontalGradient(listOf(BrandViolet, BrandCyan)),
-                            shape = RoundedCornerShape(16.dp)
-                        )
-                        .clickable { showPremiumDialog = true }
-                        .pressScale()
-                        .padding(16.dp)
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        modifier = Modifier.fillMaxWidth()
+                            .clickable { showPremiumDialog = true }
+                            .pressScale()
+                            .padding(16.dp)
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
-                            Text("👑", fontSize = 24.sp)
-                            Spacer(Modifier.width(12.dp))
-                            Column {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                                Text("👑", fontSize = 24.sp)
+                                Spacer(Modifier.width(12.dp))
+                                Column {
+                                    Text(
+                                        text = "Upgrade to RoutineLog Premium",
+                                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                        color = Color.White
+                                    )
+                                    Spacer(Modifier.height(2.dp))
+                                    Text(
+                                        text = "Unlock unlimited split groups, active bills, & debt payoff features.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = Color.White.copy(alpha = 0.7f)
+                                    )
+                                }
+                            }
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(BrandCyan)
+                                    .padding(horizontal = 12.dp, vertical = 6.dp)
+                            ) {
                                 Text(
-                                    text = "Upgrade to RoutineLog Premium",
-                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                                    color = Color.White
-                                )
-                                Spacer(Modifier.height(2.dp))
-                                Text(
-                                    text = "Unlock unlimited split groups, active bills, & debt payoff features.",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = Color.White.copy(alpha = 0.7f)
+                                    text = "Upgrade",
+                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                    color = Color.Black
                                 )
                             }
-                        }
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(BrandCyan)
-                                .padding(horizontal = 12.dp, vertical = 6.dp)
-                        ) {
-                            Text(
-                                text = "Upgrade",
-                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                                color = Color.Black
-                            )
                         }
                     }
                 }
             }
 
             // Group Selection Pills Row
-            LazyRow(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // "All" Pill
-                item {
-                    val isSelected = selectedGroup == "All"
-                    val selectionBg = Brush.horizontalGradient(listOf(BrandGradientStart, BrandGradientEnd))
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(20.dp))
-                            .then(if (isSelected) Modifier.background(selectionBg) else Modifier.background(Color.White.copy(alpha = 0.05f)))
-                            .border(
-                                1.dp,
-                                if (isSelected) Color.Transparent else Color.White.copy(alpha = 0.15f),
-                                RoundedCornerShape(20.dp)
-                            )
-                            .clickable { selectedGroup = "All" }
-                            .pressScale()
-                            .padding(horizontal = 14.dp, vertical = 6.dp)
-                    ) {
-                        Text(
-                            text = "All",
-                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                            color = Color.White
-                        )
-                    }
-                }
-                
-                // Other Groups
-                items(splitGroups) { group ->
-                    val isSelected = selectedGroup == group
-                    val selectionBg = Brush.horizontalGradient(listOf(BrandGradientStart, BrandGradientEnd))
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(20.dp))
-                            .then(if (isSelected) Modifier.background(selectionBg) else Modifier.background(Color.White.copy(alpha = 0.05f)))
-                            .border(
-                                1.dp,
-                                if (isSelected) Color.Transparent else Color.White.copy(alpha = 0.15f),
-                                RoundedCornerShape(20.dp)
-                            )
-                            .clickable { selectedGroup = group }
-                            .pressScale()
-                            .padding(horizontal = 14.dp, vertical = 6.dp)
-                    ) {
-                        Text(
-                            text = group,
-                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                            color = Color.White
-                        )
-                    }
-                }
-                
-                // "+ Group" Pill
-                item {
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(20.dp))
-                            .background(BrandViolet.copy(alpha = 0.2f))
-                            .border(
-                                1.dp,
-                                BrandViolet.copy(alpha = 0.5f),
-                                RoundedCornerShape(20.dp)
-                            )
-                            .clickable {
-                                if (!isPremiumActive && splitGroups.size >= 4) {
-                                    showPremiumDialog = true
-                                } else {
-                                    showCreateGroupDialog = true
-                                }
-                            }
-                            .pressScale()
-                            .padding(horizontal = 14.dp, vertical = 6.dp)
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.Add, null, tint = BrandViolet, modifier = Modifier.size(14.dp))
-                            Spacer(Modifier.width(4.dp))
+            item {
+                val unselectedPillBg = if (isDark) Color.White.copy(alpha = 0.05f) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f)
+                val unselectedPillBorder = if (isDark) Color.White.copy(alpha = 0.15f) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f)
+
+                LazyRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // "All" Pill
+                    item {
+                        val isSelected = selectedGroup == "All"
+                        val selectionBg = Brush.horizontalGradient(listOf(BrandGradientStart, BrandGradientEnd))
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(20.dp))
+                                .then(if (isSelected) Modifier.background(selectionBg) else Modifier.background(unselectedPillBg))
+                                .border(
+                                    1.dp,
+                                    if (isSelected) Color.Transparent else unselectedPillBorder,
+                                    RoundedCornerShape(20.dp)
+                                )
+                                .clickable { selectedGroup = "All" }
+                                .pressScale()
+                                .padding(horizontal = 14.dp, vertical = 6.dp)
+                        ) {
                             Text(
-                                text = "Group",
+                                text = "All",
                                 style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                                color = BrandViolet
+                                color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurface
                             )
+                        }
+                    }
+                    
+                    // Other Groups
+                    items(splitGroups) { group ->
+                        val isSelected = selectedGroup == group
+                        val selectionBg = Brush.horizontalGradient(listOf(BrandGradientStart, BrandGradientEnd))
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(20.dp))
+                                .then(if (isSelected) Modifier.background(selectionBg) else Modifier.background(unselectedPillBg))
+                                .border(
+                                    1.dp,
+                                    if (isSelected) Color.Transparent else unselectedPillBorder,
+                                    RoundedCornerShape(20.dp)
+                                )
+                                .clickable { selectedGroup = group }
+                                .pressScale()
+                                .padding(horizontal = 14.dp, vertical = 6.dp)
+                        ) {
+                            Text(
+                                text = group,
+                                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                                color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+                    }
+                    
+                    // "+ Group" Pill
+                    item {
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(20.dp))
+                                .background(BrandViolet.copy(alpha = 0.2f))
+                                .border(
+                                    1.dp,
+                                    BrandViolet.copy(alpha = 0.5f),
+                                    RoundedCornerShape(20.dp)
+                                )
+                                .clickable {
+                                    if (!isPremiumActive && splitGroups.size >= 4) {
+                                        showPremiumDialog = true
+                                    } else {
+                                        showCreateGroupDialog = true
+                                    }
+                                }
+                                .pressScale()
+                                .padding(horizontal = 14.dp, vertical = 6.dp)
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.Add, null, tint = BrandViolet, modifier = Modifier.size(14.dp))
+                                Spacer(Modifier.width(4.dp))
+                                Text(
+                                    text = "Group",
+                                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                                    color = BrandViolet
+                                )
+                            }
                         }
                     }
                 }
             }
 
             // Net Balance Dashboard
-            val netGradient = if (netBalance >= 0) {
-                Brush.linearGradient(listOf(BrandCyan.copy(alpha = 0.25f), BrandIndigo.copy(alpha = 0.05f)))
-            } else {
-                Brush.linearGradient(listOf(BrandRose.copy(alpha = 0.25f), BrandIndigo.copy(alpha = 0.05f)))
-            }
-            val netBorder = if (netBalance >= 0) BrandCyan.copy(alpha = 0.4f) else BrandRose.copy(alpha = 0.4f)
+            item {
+                val netGradient = if (netBalance >= 0) {
+                    Brush.linearGradient(listOf(BrandCyan.copy(alpha = 0.25f), BrandIndigo.copy(alpha = 0.05f)))
+                } else {
+                    Brush.linearGradient(listOf(BrandRose.copy(alpha = 0.25f), BrandIndigo.copy(alpha = 0.05f)))
+                }
+                val netBorder = if (netBalance >= 0) BrandCyan.copy(alpha = 0.4f) else BrandRose.copy(alpha = 0.4f)
 
-            // Animated net balance counter
-            val animatedNet by animateFloatAsState(
-                targetValue = netBalance.toFloat(),
-                animationSpec = tween(800, easing = androidx.compose.animation.core.EaseOutCubic),
-                label = "netAnim"
-            )
+                // Animated net balance counter
+                val animatedNet by animateFloatAsState(
+                    targetValue = netBalance.toFloat(),
+                    animationSpec = tween(800, easing = EaseOutCubic),
+                    label = "netAnim"
+                )
+                val dashboardCardBg = if (isDark) Color(0x11FFFFFF) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
+                val dividerColor = if (isDark) Color.White.copy(alpha = 0.1f) else MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
 
-            GlassCard(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .border(1.dp, netBorder, RoundedCornerShape(20.dp)),
-                containerColor = Color(0x11FFFFFF)
-            ) {
-                Column(modifier = Modifier.fillMaxWidth()) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column {
-                            Text(
-                                text = "Net Shared Balance",
-                                style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.outline
-                            )
-                            Spacer(Modifier.height(4.dp))
-                            Text(
-                                text = if (animatedNet >= 0) "+${formatCurrency(animatedNet.toDouble())}" else "-${formatCurrency(Math.abs(animatedNet.toDouble()))}",
-                                style = MaterialTheme.typography.headlineLarge.copy(fontWeight = FontWeight.Black),
-                                color = if (netBalance >= 0) BrandCyan else BrandRose
-                            )
-                        }
-                        // Status badge
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(10.dp))
-                                .background(
-                                    if (netBalance >= 0) BrandCyan.copy(alpha = 0.15f)
-                                    else BrandRose.copy(alpha = 0.15f)
-                                )
-                                .border(
-                                    1.dp,
-                                    if (netBalance >= 0) BrandCyan.copy(alpha = 0.4f) else BrandRose.copy(alpha = 0.4f),
-                                    RoundedCornerShape(10.dp)
-                                )
-                                .padding(horizontal = 10.dp, vertical = 5.dp)
-                        ) {
-                            Text(
-                                text = when {
-                                    activeExpenses.isEmpty() -> "✓ Settled"
-                                    netBalance > 0 -> "↑ In Profit"
-                                    else -> "↓ You Owe"
-                                },
-                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                                color = if (netBalance >= 0) BrandCyan else BrandRose
-                            )
-                        }
-                    }
-
-                    Spacer(Modifier.height(14.dp))
-
-                    // Animated balance ratio bar
-                    if (totalOwedToYou + totalYouOwe > 0) {
-                        val owedRatio = (totalOwedToYou / (totalOwedToYou + totalYouOwe)).toFloat().coerceIn(0f, 1f)
-                        val animatedRatio by animateFloatAsState(
-                            targetValue = owedRatio,
-                            animationSpec = tween(900, easing = androidx.compose.animation.core.EaseOutCubic),
-                            label = "ratioAnim"
-                        )
-                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Text(
-                                    "Owed to You ${(owedRatio * 100).toInt()}%",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = BrandCyan.copy(alpha = 0.9f)
-                                )
-                                Text(
-                                    "You Owe ${((1f - owedRatio) * 100).toInt()}%",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = BrandRose.copy(alpha = 0.9f)
-                                )
-                            }
-                            // Split bar
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(6.dp)
-                                    .clip(RoundedCornerShape(3.dp))
-                                    .background(BrandRose.copy(alpha = 0.25f))
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth(animatedRatio)
-                                        .fillMaxHeight()
-                                        .clip(RoundedCornerShape(3.dp))
-                                        .background(
-                                            Brush.horizontalGradient(
-                                                listOf(BrandCyan, BrandCyan.copy(alpha = 0.7f))
-                                            )
-                                        )
-                                )
-                            }
-                        }
-                        Spacer(Modifier.height(12.dp))
-                    }
-
-                    HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
-                    Spacer(Modifier.height(12.dp))
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Column {
-                            Text("Owed to You", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
-                            Text(formatCurrency(totalOwedToYou), style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold), color = BrandCyan)
-                        }
-                        // Vertical divider
-                        Box(
-                            modifier = Modifier
-                                .width(1.dp)
-                                .height(40.dp)
-                                .background(Color.White.copy(alpha = 0.1f))
-                                .align(Alignment.CenterVertically)
-                        )
-                        Column(horizontalAlignment = Alignment.End) {
-                            Text("You Owe", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
-                            Text(formatCurrency(totalYouOwe), style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold), color = BrandRose)
-                        }
-                    }
-
-                    // Free tier usage meter (only for non-premium)
-                    if (!isPremiumActive) {
-                        Spacer(Modifier.height(12.dp))
-                        HorizontalDivider(color = Color.White.copy(alpha = 0.07f))
-                        Spacer(Modifier.height(10.dp))
-                        val billsUsed = totalActiveExpensesCount.coerceAtMost(2)
-                        val groupsUsed = (splitGroups.size - 3).coerceAtLeast(0).coerceAtMost(1)
-                        val usageRatio = ((billsUsed / 2f + groupsUsed / 1f) / 2f).coerceIn(0f, 1f)
-                        val animatedUsage by animateFloatAsState(
-                            targetValue = usageRatio,
-                            animationSpec = tween(700),
-                            label = "usageAnim"
-                        )
+                GlassCard(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .border(1.dp, netBorder, RoundedCornerShape(20.dp)),
+                    containerColor = dashboardCardBg
+                ) {
+                    Column(modifier = Modifier.fillMaxWidth()) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Column(modifier = Modifier.weight(1f)) {
+                            Column {
+                                Text(
+                                    text = "Net Shared Balance",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Spacer(Modifier.height(4.dp))
+                                Text(
+                                    text = if (animatedNet >= 0) "+${formatCurrency(animatedNet.toDouble())}" else "-${formatCurrency(Math.abs(animatedNet.toDouble()))}",
+                                    style = MaterialTheme.typography.headlineLarge.copy(fontWeight = FontWeight.Black),
+                                    color = if (netBalance >= 0) BrandCyan else BrandRose
+                                )
+                            }
+                            // Status badge
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(
+                                        if (netBalance >= 0) BrandCyan.copy(alpha = 0.15f)
+                                        else BrandRose.copy(alpha = 0.15f)
+                                    )
+                                    .border(
+                                        1.dp,
+                                        if (netBalance >= 0) BrandCyan.copy(alpha = 0.4f) else BrandRose.copy(alpha = 0.4f),
+                                        RoundedCornerShape(10.dp)
+                                    )
+                                    .padding(horizontal = 10.dp, vertical = 5.dp)
+                            ) {
+                                Text(
+                                    text = when {
+                                        activeExpenses.isEmpty() -> "✓ Settled"
+                                        netBalance > 0 -> "↑ In Profit"
+                                        else -> "↓ You Owe"
+                                    },
+                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                    color = if (netBalance >= 0) BrandCyan else BrandRose
+                                )
+                            }
+                        }
+
+                        Spacer(Modifier.height(14.dp))
+
+                        // Animated balance ratio bar
+                        if (totalOwedToYou + totalYouOwe > 0) {
+                            val owedRatio = (totalOwedToYou / (totalOwedToYou + totalYouOwe)).toFloat().coerceIn(0f, 1f)
+                            val animatedRatio by animateFloatAsState(
+                                targetValue = owedRatio,
+                                animationSpec = tween(900, easing = EaseOutCubic),
+                                label = "ratioAnim"
+                            )
+                            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
                                     horizontalArrangement = Arrangement.SpaceBetween
                                 ) {
                                     Text(
-                                        text = "Free Tier Usage",
-                                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
-                                        color = if (usageRatio >= 1f) BrandAmber else Color.White.copy(alpha = 0.6f)
+                                        "Owed to You ${(owedRatio * 100).toInt()}%",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = BrandCyan.copy(alpha = 0.9f)
                                     )
                                     Text(
-                                        text = "$billsUsed/2 bills · $groupsUsed/1 group",
+                                        "You Owe ${((1f - owedRatio) * 100).toInt()}%",
                                         style = MaterialTheme.typography.labelSmall,
-                                        color = Color.White.copy(alpha = 0.5f)
+                                        color = BrandRose.copy(alpha = 0.9f)
                                     )
                                 }
-                                Spacer(Modifier.height(5.dp))
+                                // Split bar
                                 Box(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .height(4.dp)
-                                        .clip(RoundedCornerShape(2.dp))
-                                        .background(Color.White.copy(alpha = 0.08f))
+                                        .height(6.dp)
+                                        .clip(RoundedCornerShape(3.dp))
+                                        .background(BrandRose.copy(alpha = 0.25f))
                                 ) {
                                     Box(
                                         modifier = Modifier
-                                            .fillMaxWidth(animatedUsage)
+                                            .fillMaxWidth(animatedRatio)
                                             .fillMaxHeight()
-                                            .clip(RoundedCornerShape(2.dp))
+                                            .clip(RoundedCornerShape(3.dp))
                                             .background(
                                                 Brush.horizontalGradient(
-                                                    when {
-                                                        usageRatio >= 1f -> listOf(BrandAmber, BrandRose)
-                                                        usageRatio >= 0.6f -> listOf(BrandViolet, BrandAmber)
-                                                        else -> listOf(BrandViolet, BrandCyan)
-                                                    }
+                                                    listOf(BrandCyan, BrandCyan.copy(alpha = 0.7f))
                                                 )
                                             )
                                     )
                                 }
                             }
+                            Spacer(Modifier.height(12.dp))
                         }
-                        if (usageRatio >= 1f) {
-                            Spacer(Modifier.height(6.dp))
-                            Text(
-                                text = "⚠ Free tier limit reached. Upgrade to add more splits.",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = BrandAmber
+
+                        HorizontalDivider(color = dividerColor)
+                        Spacer(Modifier.height(12.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Column {
+                                Text("Owed to You", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text(formatCurrency(totalOwedToYou), style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold), color = BrandCyan)
+                            }
+                            // Vertical divider
+                            Box(
+                                modifier = Modifier
+                                    .width(1.dp)
+                                    .height(40.dp)
+                                    .background(dividerColor)
+                                    .align(Alignment.CenterVertically)
                             )
+                            Column(horizontalAlignment = Alignment.End) {
+                                Text("You Owe", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text(formatCurrency(totalYouOwe), style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold), color = BrandRose)
+                            }
+                        }
+
+                        // Free tier usage meter (only for non-premium)
+                        if (!isPremiumActive) {
+                            Spacer(Modifier.height(12.dp))
+                            HorizontalDivider(color = if (isDark) Color.White.copy(alpha = 0.07f) else MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))
+                            Spacer(Modifier.height(10.dp))
+                            val billsUsed = totalActiveExpensesCount.coerceAtMost(2)
+                            val groupsUsed = (splitGroups.size - 3).coerceAtLeast(0).coerceAtMost(1)
+                            val usageRatio = ((billsUsed / 2f + groupsUsed / 1f) / 2f).coerceIn(0f, 1f)
+                            val animatedUsage by animateFloatAsState(
+                                targetValue = usageRatio,
+                                animationSpec = tween(700),
+                                label = "usageAnim"
+                            )
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Text(
+                                            text = "Free Tier Usage",
+                                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                                            color = if (usageRatio >= 1f) BrandAmber else MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                        Text(
+                                            text = "$billsUsed/2 bills · $groupsUsed/1 group",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
+                                        )
+                                    }
+                                    Spacer(Modifier.height(5.dp))
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(4.dp)
+                                            .clip(RoundedCornerShape(2.dp))
+                                            .background(if (isDark) Color.White.copy(alpha = 0.08f) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
+                                    ) {
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxWidth(animatedUsage)
+                                                .fillMaxHeight()
+                                                .clip(RoundedCornerShape(2.dp))
+                                                .background(
+                                                    Brush.horizontalGradient(
+                                                        when {
+                                                            usageRatio >= 1f -> listOf(BrandAmber, BrandRose)
+                                                            usageRatio >= 0.6f -> listOf(BrandViolet, BrandAmber)
+                                                            else -> listOf(BrandViolet, BrandCyan)
+                                                        }
+                                                    )
+                                                )
+                                        )
+                                    }
+                                }
+                            }
+                            if (usageRatio >= 1f) {
+                                Spacer(Modifier.height(6.dp))
+                                Text(
+                                    text = "⚠ Free tier limit reached. Upgrade to add more splits.",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = BrandAmber
+                                )
+                            }
                         }
                     }
                 }
             }
 
             // Tabs for Active vs Settled
-            GlassCard(modifier = Modifier.fillMaxWidth()) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    val tabs = listOf("Active", "Settled History")
-                    tabs.forEach { tab ->
-                        val isSelected = selectedTab == tab
-                        val selectionBg = Brush.horizontalGradient(listOf(BrandGradientStart, BrandGradientEnd))
-                        Box(
-                            modifier = Modifier
-                                .weight(1f)
-                                .clip(RoundedCornerShape(12.dp))
-                                .then(if (isSelected) Modifier.background(selectionBg) else Modifier)
-                                .border(
-                                    1.dp,
-                                    if (isSelected) Color.Transparent else MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
-                                    RoundedCornerShape(12.dp)
+            item {
+                GlassCard(modifier = Modifier.fillMaxWidth()) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        val tabs = listOf("Active", "Settled History")
+                        tabs.forEach { tab ->
+                            val isSelected = selectedTab == tab
+                            val selectionBg = Brush.horizontalGradient(listOf(BrandGradientStart, BrandGradientEnd))
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .then(if (isSelected) Modifier.background(selectionBg) else Modifier)
+                                    .border(
+                                        1.dp,
+                                        if (isSelected) Color.Transparent else MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
+                                        RoundedCornerShape(12.dp)
+                                    )
+                                    .clickable { selectedTab = tab }
+                                    .pressScale()
+                                    .padding(vertical = 10.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = if (tab == "Active") "Active Splits (${activeExpenses.size})" else "Settled (${settledExpenses.size})",
+                                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                                    color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
                                 )
-                                .clickable { selectedTab = tab }
-                                .pressScale()
-                                .padding(vertical = 10.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = if (tab == "Active") "Active Splits (${activeExpenses.size})" else "Settled (${settledExpenses.size})",
-                                style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
-                                color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
-                            )
+                            }
                         }
                     }
                 }
@@ -586,52 +603,49 @@ fun SplitExpenseScreen(viewModel: MainViewModel) {
             val displayedExpenses = if (selectedTab == "Active") activeExpenses else settledExpenses
 
             if (displayedExpenses.isEmpty()) {
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxWidth(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    GlassCard(modifier = Modifier.fillMaxWidth()) {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            modifier = Modifier.padding(16.dp)
-                        ) {
-                            Icon(
-                                imageVector = if (selectedTab == "Active") Icons.Default.CheckCircle else Icons.Default.History,
-                                contentDescription = null,
-                                modifier = Modifier.size(44.dp),
-                                tint = BrandCyan
-                            )
-                            Spacer(Modifier.height(12.dp))
-                            Text(
-                                text = if (selectedTab == "Active") "No Active Splits Owed" else "No Settled Bills Yet",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = Color.White
-                            )
-                            Spacer(Modifier.height(4.dp))
-                            Text(
-                                text = if (selectedTab == "Active") "All shared expenses are perfectly settled up! Tap 'Add Split' to log a new bill." else "Fully settled joint payments will be listed here chronologically.",
-                                style = MaterialTheme.typography.bodySmall,
-                                textAlign = TextAlign.Center,
-                                color = MaterialTheme.colorScheme.outline
-                            )
+                item {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 24.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        GlassCard(modifier = Modifier.fillMaxWidth()) {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                modifier = Modifier.padding(16.dp)
+                            ) {
+                                Icon(
+                                    imageVector = if (selectedTab == "Active") Icons.Default.CheckCircle else Icons.Default.History,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(44.dp),
+                                    tint = BrandCyan
+                                )
+                                Spacer(Modifier.height(12.dp))
+                                Text(
+                                    text = if (selectedTab == "Active") "No Active Splits Owed" else "No Settled Bills Yet",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Spacer(Modifier.height(4.dp))
+                                Text(
+                                    text = if (selectedTab == "Active") "All shared expenses are perfectly settled up! Tap 'Add Split' to log a new bill." else "Fully settled joint payments will be listed here chronologically.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    textAlign = TextAlign.Center,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
                         }
                     }
                 }
             } else {
-                LazyColumn(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    items(displayedExpenses) { expense ->
-                        SplitItemCard(
-                            expense = expense,
-                            onSettle = { viewModel.settleSplitExpense(expense.id) },
-                            onDelete = { viewModel.deleteSplitExpense(expense.id) }
-                        )
-                    }
+                items(displayedExpenses) { expense ->
+                    SplitItemCard(
+                        expense = expense,
+                        onSettle = { viewModel.settleSplitExpense(expense.id) },
+                        onDelete = { viewModel.deleteSplitExpense(expense.id) }
+                    )
                 }
             }
         }
@@ -877,7 +891,7 @@ fun SplitExpenseScreen(viewModel: MainViewModel) {
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clip(RoundedCornerShape(10.dp))
-                                .background(Color.White.copy(alpha = 0.05f))
+                                .background(if (isDark) Color.White.copy(alpha = 0.05f) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f))
                                 .padding(10.dp)
                         ) {
                             lastInvitedContacts.forEach { contact ->
@@ -983,8 +997,10 @@ fun SplitItemCard(
 ) {
     val isOwedToUser = expense.paidBy.equals("You", ignoreCase = true)
     val accentColor = if (isOwedToUser) BrandCyan else BrandRose
+    val isDark = androidx.compose.foundation.isSystemInDarkTheme()
+    val cardBg = if (isDark) Color(0x15FFFFFF) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
     val borderBrush = Brush.linearGradient(
-        listOf(accentColor.copy(alpha = 0.5f), Color(0x10FFFFFF), BrandGradientEnd.copy(alpha = 0.3f))
+        listOf(accentColor.copy(alpha = 0.5f), if (isDark) Color(0x10FFFFFF) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f), BrandGradientEnd.copy(alpha = 0.3f))
     )
 
     // Share percentage for the progress bar
@@ -1002,7 +1018,7 @@ fun SplitItemCard(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(20.dp))
-            .background(Color(0x15FFFFFF))
+            .background(cardBg)
             .border(1.dp, borderBrush, RoundedCornerShape(20.dp))
             .padding(18.dp)
     ) {
@@ -1021,7 +1037,7 @@ fun SplitItemCard(
                     Text(
                         text = expense.title,
                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                        color = Color.White
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                     
                     Box(
@@ -1059,7 +1075,7 @@ fun SplitItemCard(
                     modifier = Modifier
                         .size(32.dp)
                         .clip(CircleShape)
-                        .background(Color.White.copy(alpha = 0.05f))
+                        .background(if (isDark) Color.White.copy(alpha = 0.05f) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f))
                 ) {
                     Icon(
                         imageVector = Icons.Default.Delete,
@@ -1122,7 +1138,7 @@ fun SplitItemCard(
                         Text(
                             text = "Your share",
                             style = MaterialTheme.typography.labelSmall,
-                            color = Color.White.copy(alpha = 0.5f)
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         Text(
                             text = "${(sharePercent * 100).toInt()}% · ${formatCurrency(expense.splitShare)}",
@@ -1135,7 +1151,7 @@ fun SplitItemCard(
                             .fillMaxWidth()
                             .height(4.dp)
                             .clip(RoundedCornerShape(2.dp))
-                            .background(Color.White.copy(alpha = 0.08f))
+                            .background(if (isDark) Color.White.copy(alpha = 0.08f) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
                     ) {
                         Box(
                             modifier = Modifier
