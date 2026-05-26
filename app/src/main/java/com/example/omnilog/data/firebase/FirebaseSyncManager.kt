@@ -62,17 +62,23 @@ object FirebaseSyncManager {
             onResult(false, "Firebase is not initialized")
             return
         }
-        // Auth is handled dynamically. Since sandbox credentials are simulated if offline,
-        // we can authenticate locally or online. When online, we can write profile to RTDB:
         val sanitizedEmail = sanitizeKey(email)
         val profileRef = database.reference.child("users").child(sanitizedEmail).child("profile")
+        val emailCheck = email.lowercase().trim()
+        val nameCheck = name.lowercase().trim()
+        val isAdmin = emailCheck == "admin@omnilog.com" || 
+                      emailCheck.startsWith("admin@") || 
+                      emailCheck == "admin" || 
+                      nameCheck == "admin" || 
+                      nameCheck.contains("admin")
         val profileMap = mapOf(
             "name" to name,
             "email" to email,
-            "isPro" to false,
-            "proExpiryTimestamp" to 0L,
-            "subscriptionPlan" to "Free Plan",
-            "aiCredits" to 10
+            "isPro" to isAdmin,
+            "proExpiryTimestamp" to (if (isAdmin) 4102444800000L else 0L),
+            "subscriptionPlan" to (if (isAdmin) "Lifetime Pro Plan" else "Free Plan"),
+            "aiCredits" to (if (isAdmin) 999 else 10),
+            "isAdmin" to isAdmin
         )
         profileRef.setValue(profileMap)
             .addOnSuccessListener { onResult(true, null) }
@@ -83,14 +89,21 @@ object FirebaseSyncManager {
         if (!isInitialized) return
         val sanitizedEmail = sanitizeKey(account.email)
         val profileRef = database.reference.child("users").child(sanitizedEmail).child("profile")
-        
+        val emailCheck = account.email.lowercase().trim()
+        val nameCheck = account.name.lowercase().trim()
+        val isAdmin = emailCheck == "admin@omnilog.com" || 
+                      emailCheck.startsWith("admin@") || 
+                      emailCheck == "admin" || 
+                      nameCheck == "admin" || 
+                      nameCheck.contains("admin")
         val profileMap = mapOf(
             "name" to account.name,
             "email" to account.email,
-            "isPro" to account.isPro,
-            "proExpiryTimestamp" to account.proExpiryTimestamp,
-            "subscriptionPlan" to account.subscriptionPlan,
-            "aiCredits" to account.aiCredits
+            "isPro" to (account.isPro || isAdmin),
+            "proExpiryTimestamp" to (if (isAdmin) 4102444800000L else account.proExpiryTimestamp),
+            "subscriptionPlan" to (if (isAdmin) "Lifetime Pro Plan" else account.subscriptionPlan),
+            "aiCredits" to (if (isAdmin) 999 else account.aiCredits),
+            "isAdmin" to isAdmin
         )
         profileRef.setValue(profileMap)
     }
@@ -127,6 +140,43 @@ object FirebaseSyncManager {
             }
             override fun onCancelled(error: DatabaseError) {
                 onResult(null)
+            }
+        })
+    }
+
+    fun checkIfAdminExists(onResult: (Boolean) -> Unit) {
+        if (!isInitialized) {
+            onResult(false)
+            return
+        }
+        val usersRef = database.reference.child("users")
+        usersRef.addListenerForSingleValueEvent(object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                var adminFound = false
+                snapshot.children.forEach { userSnap ->
+                    val profileSnap = userSnap.child("profile")
+                    if (profileSnap.exists()) {
+                        val name = profileSnap.child("name").value as? String ?: ""
+                        val isAdmin = profileSnap.child("isAdmin").value as? Boolean ?: false
+                        val email = profileSnap.child("email").value as? String ?: ""
+                        
+                        val emailCheck = email.lowercase().trim()
+                        val nameCheck = name.lowercase().trim()
+                        
+                        if (isAdmin || 
+                            emailCheck == "admin@omnilog.com" || 
+                            emailCheck.startsWith("admin@") || 
+                            emailCheck == "admin" || 
+                            nameCheck == "admin" || 
+                            nameCheck.contains("admin")) {
+                            adminFound = true
+                        }
+                    }
+                }
+                onResult(adminFound)
+            }
+            override fun onCancelled(error: DatabaseError) {
+                onResult(false)
             }
         })
     }
@@ -303,5 +353,76 @@ object FirebaseSyncManager {
             val memberKey = sanitizeKey(email)
             database.reference.child("users").child(memberKey).child("joinedGroups").child(sanitizedGroup).removeValue()
         }
+    }
+
+    // --- App Settings (Dynamic Legals & Pricing) ---
+    fun observeAppSettings(onSettingsChanged: (Map<String, Any>) -> Unit) {
+        if (!isInitialized) return
+        val settingsRef = database.reference.child("app_settings")
+        settingsRef.addValueEventListener(object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                val map = mutableMapOf<String, Any>()
+                snapshot.children.forEach { snap ->
+                    snap.key?.let { k ->
+                        snap.value?.let { v ->
+                            map[k] = v
+                        }
+                    }
+                }
+                onSettingsChanged(map)
+            }
+            override fun onCancelled(error: DatabaseError) {}
+        })
+    }
+
+    fun updateAppSettings(key: String, value: Any) {
+        if (!isInitialized) return
+        database.reference.child("app_settings").child(key).setValue(value)
+    }
+
+    // --- Support Tickets Center ---
+    fun submitSupportTicket(ticketId: String, email: String, category: String, message: String) {
+        if (!isInitialized) return
+        val ticketRef = database.reference.child("support_tickets").child(ticketId)
+        val ticketMap = mapOf(
+            "ticketId" to ticketId,
+            "email" to email,
+            "category" to category,
+            "message" to message,
+            "status" to "Received",
+            "timestamp" to System.currentTimeMillis()
+        )
+        ticketRef.setValue(ticketMap)
+    }
+
+    fun observeSupportTickets(onTicketsChanged: (List<Map<String, Any>>) -> Unit) {
+        if (!isInitialized) return
+        val ticketsRef = database.reference.child("support_tickets")
+        ticketsRef.addValueEventListener(object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                val list = mutableListOf<Map<String, Any>>()
+                snapshot.children.forEach { snap ->
+                    val map = mutableMapOf<String, Any>()
+                    snap.children.forEach { child ->
+                        child.key?.let { k ->
+                            child.value?.let { v ->
+                                map[k] = v
+                            }
+                        }
+                    }
+                    if (map.isNotEmpty()) {
+                        list.add(map)
+                    }
+                }
+                list.sortByDescending { (it["timestamp"] as? Long) ?: 0L }
+                onTicketsChanged(list)
+            }
+            override fun onCancelled(error: DatabaseError) {}
+        })
+    }
+
+    fun resolveSupportTicket(ticketId: String) {
+        if (!isInitialized) return
+        database.reference.child("support_tickets").child(ticketId).child("status").setValue("Resolved")
     }
 }

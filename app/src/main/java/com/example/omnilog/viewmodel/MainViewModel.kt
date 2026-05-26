@@ -18,6 +18,8 @@ import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.*
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val logDao = AppDatabase.getDatabase(application).logDao()
@@ -65,6 +67,27 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _cloudSyncStatus = MutableStateFlow("Local Sandbox ⚡")
     val cloudSyncStatus: StateFlow<String> = _cloudSyncStatus.asStateFlow()
 
+    private val _privacyPolicyText = MutableStateFlow("• On-Device Sandbox (Offline Mode): By default, all debt roadmaps, asset portfolios, personal finance items, and pantry logs reside solely inside your local SQLite database. Toggle core encryption to secure your records with AES-256 on-device key locks.\n\n• Secure Group Syncing (Online Mode): Collaborating with family members dynamically syncs shared group ledger nodes via secure Firebase trees. Private personal ledgers, asset items, or daily targets are strictly kept offline and never synced.\n\n• Cryptographic Key Control: In AES-256 encrypted database mode, decryption keys are kept locally. They are never uploaded, shared, or backed up remotely. Be sure to keep your password and keys secure.\n\n• Zero-Tracker Promise: RoutineLog has no telemetry frameworks, advertising SDKs, background behavioral scrapers, or third-party marketing services.")
+    val privacyPolicyText: StateFlow<String> = _privacyPolicyText.asStateFlow()
+
+    private val _aboutUsText = MutableStateFlow("RoutineLog is a premium hybrid financial ledger designed for absolute privacy, speed, and visual elegance. It operates seamlessly in both local offline sandbox and secure cloud-synced sharing modes.")
+    val aboutUsText: StateFlow<String> = _aboutUsText.asStateFlow()
+
+    private val _priceMonthlyPlan = MutableStateFlow("₹199")
+    val priceMonthlyPlan: StateFlow<String> = _priceMonthlyPlan.asStateFlow()
+
+    private val _priceYearlyPlan = MutableStateFlow("₹1199")
+    val priceYearlyPlan: StateFlow<String> = _priceYearlyPlan.asStateFlow()
+
+    private val _priceLifetimePlan = MutableStateFlow("₹2999")
+    val priceLifetimePlan: StateFlow<String> = _priceLifetimePlan.asStateFlow()
+
+    private val _isAdminUser = MutableStateFlow(false)
+    val isAdminUser: StateFlow<Boolean> = _isAdminUser.asStateFlow()
+
+    private val _supportTickets = MutableStateFlow<List<Map<String, Any>>>(emptyList())
+    val supportTickets: StateFlow<List<Map<String, Any>>> = _supportTickets.asStateFlow()
+
     val isPremiumActive = userAccount.map {
         it?.isPro == true && it.proExpiryTimestamp > System.currentTimeMillis()
     }.stateIn(viewModelScope, SharingStarted.Eagerly, false)
@@ -79,33 +102,76 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         if (email != null) {
             startCloudSynchronizer(email)
         }
+
+        // Global settings observer as soon as application boots up if Firebase is initialized
+        if (com.example.omnilog.data.firebase.FirebaseSyncManager.isInitialized) {
+            com.example.omnilog.data.firebase.FirebaseSyncManager.observeAppSettings { settings ->
+                (settings["privacyPolicy"] as? String)?.let { _privacyPolicyText.value = it }
+                (settings["aboutUs"] as? String)?.let { _aboutUsText.value = it }
+                (settings["pricingPlanMonthly"] as? String)?.let { _priceMonthlyPlan.value = it }
+                (settings["pricingPlanYearly"] as? String)?.let { _priceYearlyPlan.value = it }
+                (settings["pricingPlanLifetime"] as? String)?.let { _priceLifetimePlan.value = it }
+            }
+        }
+    }
+
+    private fun isNetworkAvailable(): Boolean {
+        val connectivityManager = getApplication<Application>().getSystemService(android.content.Context.CONNECTIVITY_SERVICE) as? android.net.ConnectivityManager
+        val network = connectivityManager?.activeNetwork ?: return false
+        val activeNetwork = connectivityManager.getNetworkCapabilities(network) ?: return false
+        return activeNetwork.hasTransport(android.net.NetworkCapabilities.TRANSPORT_WIFI) ||
+               activeNetwork.hasTransport(android.net.NetworkCapabilities.TRANSPORT_CELLULAR) ||
+               activeNetwork.hasTransport(android.net.NetworkCapabilities.TRANSPORT_ETHERNET)
     }
 
     fun startCloudSynchronizer(email: String) {
-        if (!com.example.omnilog.data.firebase.FirebaseSyncManager.isInitialized) {
+        val trimmedEmail = email.lowercase().trim()
+        val nameCheck = _userAccount.value?.name?.lowercase()?.trim() ?: ""
+        val isUserAdmin = trimmedEmail == "admin@omnilog.com" || 
+                          trimmedEmail.startsWith("admin@") || 
+                          trimmedEmail == "admin" || 
+                          nameCheck == "admin" || 
+                          nameCheck.contains("admin")
+        _isAdminUser.value = isUserAdmin
+
+        val isRealFirebase = com.example.omnilog.data.firebase.FirebaseSyncManager.isInitialized && 
+                             com.example.omnilog.data.firebase.FirebaseSyncManager.database.app.name != "RoutineLogCloud"
+
+        if (!isRealFirebase || !isNetworkAvailable()) {
             _cloudSyncStatus.value = "Local Sandbox ⚡"
             return
         }
         _cloudSyncStatus.value = "Connected ☁️"
-        
-        // Listen to splits and custom groups containing our email in real-time
+
+        // 1. Listen to splits and custom groups containing our email in real-time
         com.example.omnilog.data.firebase.FirebaseSyncManager.observeRealtimeSplits(email) { cloudSplits ->
             viewModelScope.launch(Dispatchers.IO) {
                 cloudSplits.forEach { cloudSplit ->
-                    // 1. Sync custom groups dynamically
                     if (!_customGroups.value.contains(cloudSplit.groupName)) {
                         _customGroups.value = _customGroups.value + cloudSplit.groupName
                     }
-                    
-                    // 2. Cache split expense locally in Room database
                     val local = logDao.getSplitExpenseSync(cloudSplit.id)
-                    if (local == null) {
-                        logDao.insertSplitExpense(cloudSplit)
-                    } else if (local.isSettled != cloudSplit.isSettled) {
+                    if (local == null || local.isSettled != cloudSplit.isSettled) {
                         logDao.insertSplitExpense(cloudSplit)
                     }
                 }
                 refreshDataInternal()
+            }
+        }
+
+        // 2. Listen to app_settings reactively
+        com.example.omnilog.data.firebase.FirebaseSyncManager.observeAppSettings { settings ->
+            (settings["privacyPolicy"] as? String)?.let { _privacyPolicyText.value = it }
+            (settings["aboutUs"] as? String)?.let { _aboutUsText.value = it }
+            (settings["pricingPlanMonthly"] as? String)?.let { _priceMonthlyPlan.value = it }
+            (settings["pricingPlanYearly"] as? String)?.let { _priceYearlyPlan.value = it }
+            (settings["pricingPlanLifetime"] as? String)?.let { _priceLifetimePlan.value = it }
+        }
+
+        // 3. Listen to support tickets if Admin
+        if (_isAdminUser.value) {
+            com.example.omnilog.data.firebase.FirebaseSyncManager.observeSupportTickets { tickets ->
+                _supportTickets.value = tickets
             }
         }
     }
@@ -145,7 +211,32 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             if (account == null) {
                 logDao.updateUserAccount(UserAccount("local_user", "Guest", "guest@omnilog.com"))
             }
-            _userAccount.value = logDao.getUserAccountSync("local_user")
+            val currentAccount = logDao.getUserAccountSync("local_user")
+            _userAccount.value = currentAccount
+
+            currentAccount?.let { acc ->
+                val emailCheck = acc.email.lowercase().trim()
+                val nameCheck = acc.name.lowercase().trim()
+                val isUserAdmin = emailCheck == "admin@omnilog.com" || 
+                                  emailCheck.startsWith("admin@") || 
+                                  emailCheck == "admin" || 
+                                  nameCheck == "admin" || 
+                                  nameCheck.contains("admin")
+                
+                withContext(Dispatchers.Main) {
+                    val wasAdminBefore = _isAdminUser.value
+                    _isAdminUser.value = isUserAdmin
+                    
+                    // If the user is identified as admin, ensure they are observing support tickets
+                    if (isUserAdmin && (!wasAdminBefore || _supportTickets.value.isEmpty())) {
+                        if (com.example.omnilog.data.firebase.FirebaseSyncManager.isInitialized) {
+                            com.example.omnilog.data.firebase.FirebaseSyncManager.observeSupportTickets { tickets ->
+                                _supportTickets.value = tickets
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -194,53 +285,160 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun loginUser(email: String, onSuccess: () -> Unit, onFailure: (String) -> Unit) {
         viewModelScope.launch(Dispatchers.IO) {
-            if (com.example.omnilog.data.firebase.FirebaseSyncManager.isInitialized) {
-                var callbackInvoked = false
-                
-                // 1. Launch a 6-second timeout job to prevent indefinite UI loading states
-                val timeoutJob = launch {
-                    delay(6000)
-                    if (!callbackInvoked) {
-                        callbackInvoked = true
-                        withContext(Dispatchers.Main) {
-                            onFailure("Firebase connection timed out. Please check your network connectivity, database URL, and security rules.")
-                        }
+            val trimmedEmail = email.lowercase().trim()
+            val isUserAdmin = trimmedEmail == "admin@omnilog.com" || 
+                              trimmedEmail.startsWith("admin@") || 
+                              trimmedEmail == "admin"
+
+            // 1. Instantly fallback if we are in local sandbox simulation mode (fallback database active)
+            val isRealFirebase = com.example.omnilog.data.firebase.FirebaseSyncManager.isInitialized && 
+                                 com.example.omnilog.data.firebase.FirebaseSyncManager.database.app.name != "RoutineLogCloud"
+
+            if (!isRealFirebase) {
+                withContext(Dispatchers.Main) {
+                    onFailure("Firebase database sandbox active. Falling back to local sandbox instantly.")
+                }
+                return@launch
+            }
+
+            // 2. Instantly fallback if the device is completely offline
+            if (!isNetworkAvailable()) {
+                withContext(Dispatchers.Main) {
+                    onFailure("Device is offline. Falling back to local sandbox instantly.")
+                }
+                return@launch
+            }
+
+            var callbackInvoked = false
+            // Shorter 2-second timeout for normal users, 6 seconds for admin users
+            val timeoutLimit = if (isUserAdmin) 6000L else 2000L
+            
+            val timeoutJob = launch {
+                delay(timeoutLimit)
+                if (!callbackInvoked) {
+                    callbackInvoked = true
+                    withContext(Dispatchers.Main) {
+                        onFailure("Firebase connection timed out. Falling back to local sandbox.")
                     }
                 }
+            }
 
-                com.example.omnilog.data.firebase.FirebaseSyncManager.fetchUserProfile(email) { cloudAccount ->
-                    if (!callbackInvoked) {
-                        callbackInvoked = true
-                        timeoutJob.cancel()
-                        viewModelScope.launch(Dispatchers.IO) {
-                            if (cloudAccount != null) {
-                                // Restore pro subscription status and profile details to local Room cache
-                                logDao.updateUserAccount(cloudAccount)
-                                refreshDataInternal()
-                                
-                                val prefs = getApplication<Application>().getSharedPreferences("auth_prefs", android.content.Context.MODE_PRIVATE)
-                                prefs.edit().putString("authenticated_user_email", email).apply()
-                                
-                                withContext(Dispatchers.Main) {
-                                    startCloudSynchronizer(email)
-                                    notificationManager.sendAlert(
-                                        "Welcome back! ⚡",
-                                        "Successfully synced and restored profile for ${cloudAccount.name}."
-                                    )
-                                    onSuccess()
-                                }
-                            } else {
-                                // Email is not registered on cloud yet, allow offline sandbox fallback or create account
-                                withContext(Dispatchers.Main) {
-                                    onFailure("Email not found in cloud. Please register first.")
-                                }
+            com.example.omnilog.data.firebase.FirebaseSyncManager.fetchUserProfile(email) { cloudAccount ->
+                if (!callbackInvoked) {
+                    callbackInvoked = true
+                    timeoutJob.cancel()
+                    viewModelScope.launch(Dispatchers.IO) {
+                        if (cloudAccount != null) {
+                            // Restore pro subscription status and profile details to local Room cache
+                            logDao.updateUserAccount(cloudAccount)
+                            refreshDataInternal()
+                            
+                            val prefs = getApplication<Application>().getSharedPreferences("auth_prefs", android.content.Context.MODE_PRIVATE)
+                            prefs.edit().putString("authenticated_user_email", email).apply()
+                            
+                            withContext(Dispatchers.Main) {
+                                startCloudSynchronizer(email)
+                                notificationManager.sendAlert(
+                                    "Welcome back! ⚡",
+                                    "Successfully synced and restored profile for ${cloudAccount.name}."
+                                )
+                                onSuccess()
+                            }
+                        } else {
+                            // Email is not registered on cloud yet, allow offline sandbox fallback or create account
+                            withContext(Dispatchers.Main) {
+                                onFailure("Email not found in cloud. Please register first.")
                             }
                         }
                     }
                 }
+            }
+        }
+    }
+
+    fun loginUserOffline(email: String, onSuccess: () -> Unit) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val existing = logDao.getUserAccountSync("local_user")
+            val newUser = if (existing != null) {
+                existing.copy(email = email, name = if (existing.email == email) existing.name else "User")
+            } else {
+                UserAccount("local_user", "User", email)
+            }
+            logDao.updateUserAccount(newUser)
+            refreshDataInternal()
+
+            val prefs = getApplication<Application>().getSharedPreferences("auth_prefs", android.content.Context.MODE_PRIVATE)
+            prefs.edit().putString("authenticated_user_email", email).apply()
+
+            withContext(Dispatchers.Main) {
+                startCloudSynchronizer(email)
+                notificationManager.sendAlert(
+                    "Local Sandbox Active ⚡",
+                    "Firebase connection offline or sandbox active. Logged in successfully via local offline sandbox."
+                )
+                onSuccess()
+            }
+        }
+    }
+
+    fun checkIfAdminRegistered(name: String, email: String, onResult: (Boolean) -> Unit) {
+        val emailCheck = email.lowercase().trim()
+        val nameCheck = name.lowercase().trim()
+        val isNewAdmin = emailCheck == "admin@omnilog.com" || 
+                         emailCheck.startsWith("admin@") || 
+                         emailCheck == "admin" || 
+                         nameCheck == "admin" || 
+                         nameCheck.contains("admin")
+                         
+        if (!isNewAdmin) {
+            onResult(false)
+            return
+        }
+
+        viewModelScope.launch(Dispatchers.IO) {
+            // 1. Check local SQLite user account
+            val localAccount = logDao.getUserAccountSync("local_user")
+            if (localAccount != null) {
+                val localEmail = localAccount.email.lowercase().trim()
+                val localName = localAccount.name.lowercase().trim()
+                val isLocalAdmin = localEmail == "admin@omnilog.com" || 
+                                   localEmail.startsWith("admin@") || 
+                                   localEmail == "admin" || 
+                                   localName == "admin" || 
+                                   localName.contains("admin")
+                                   
+                if (isLocalAdmin && localEmail != emailCheck) {
+                    withContext(Dispatchers.Main) {
+                        onResult(true)
+                    }
+                    return@launch
+                }
+            }
+            
+            // 2. Check SharedPreferences
+            val prefs = getApplication<Application>().getSharedPreferences("auth_prefs", android.content.Context.MODE_PRIVATE)
+            val savedEmail = prefs.getString("authenticated_user_email", null)
+            if (savedEmail != null) {
+                val savedEmailCheck = savedEmail.lowercase().trim()
+                val isSavedAdmin = savedEmailCheck == "admin@omnilog.com" || 
+                                   savedEmailCheck.startsWith("admin@") || 
+                                   savedEmailCheck == "admin"
+                if (isSavedAdmin && savedEmailCheck != emailCheck) {
+                    withContext(Dispatchers.Main) {
+                        onResult(true)
+                    }
+                    return@launch
+                }
+            }
+            
+            // 3. Check Firebase Realtime Database
+            if (com.example.omnilog.data.firebase.FirebaseSyncManager.isInitialized) {
+                com.example.omnilog.data.firebase.FirebaseSyncManager.checkIfAdminExists { adminExists ->
+                    onResult(adminExists)
+                }
             } else {
                 withContext(Dispatchers.Main) {
-                    onFailure("Firebase not initialized. Login failed.")
+                    onResult(false)
                 }
             }
         }
@@ -900,9 +1098,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             _customGroups.value = _customGroups.value + name
             _groupInvitedMembers.value = _groupInvitedMembers.value + (name to invites)
             
-            // Push group creation and user mappings to Firebase Realtime Database
-            val myEmail = userAccount.value?.email ?: "guest@omnilog.com"
-            com.example.omnilog.data.firebase.FirebaseSyncManager.createGroupOnCloud(name, myEmail, invites)
+            // Push group creation and user mappings to Firebase Realtime Database ONLY if they invited someone!
+            if (invites.isNotEmpty()) {
+                val myEmail = userAccount.value?.email ?: "guest@omnilog.com"
+                com.example.omnilog.data.firebase.FirebaseSyncManager.createGroupOnCloud(name, myEmail, invites)
+            }
 
             _uiState.value = UiState.Success("Group '$name' created successfully!")
             
@@ -942,9 +1142,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
             refreshDataInternal()
             
-            // 4. Sync name change to the cloud
-            val members = invites + (userAccount.value?.email ?: "guest@omnilog.com")
-            com.example.omnilog.data.firebase.FirebaseSyncManager.updateGroupNameOnCloud(oldName, newName, members)
+            // 4. Sync name change to the cloud ONLY if the group has invited members (is shared)
+            if (invites.isNotEmpty()) {
+                val members = invites + (userAccount.value?.email ?: "guest@omnilog.com")
+                com.example.omnilog.data.firebase.FirebaseSyncManager.updateGroupNameOnCloud(oldName, newName, members)
+            }
             
             withContext(Dispatchers.Main) {
                 _uiState.value = UiState.Success("Group name updated to '$newName'!")
@@ -964,7 +1166,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 _groupInvitedMembers.value = updatedInvitesMap
                 
                 // Sync to cloud
-                com.example.omnilog.data.firebase.FirebaseSyncManager.addMemberToGroupOnCloud(groupName, memberEmail)
+                val myEmail = userAccount.value?.email ?: "guest@omnilog.com"
+                if (invites.isEmpty()) {
+                    // Transition from Private to Shared: initialize group on Firebase and push all local splits
+                    com.example.omnilog.data.firebase.FirebaseSyncManager.createGroupOnCloud(groupName, myEmail, newInvites)
+                    
+                    val localSplits = logDao.getAllSplitExpensesSync().filter { it.groupName == groupName }
+                    localSplits.forEach { split ->
+                        com.example.omnilog.data.firebase.FirebaseSyncManager.pushSplitExpense(split)
+                    }
+                } else {
+                    // Group was already shared, just append the new member
+                    com.example.omnilog.data.firebase.FirebaseSyncManager.addMemberToGroupOnCloud(groupName, memberEmail)
+                }
                 
                 withContext(Dispatchers.Main) {
                     notificationManager.sendAlert(
@@ -986,8 +1200,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 updatedInvitesMap[groupName] = newInvites
                 _groupInvitedMembers.value = updatedInvitesMap
                 
-                // Sync to cloud
-                com.example.omnilog.data.firebase.FirebaseSyncManager.removeMemberFromGroupOnCloud(groupName, memberEmail)
+                // Sync to cloud ONLY if we have other members left
+                if (newInvites.isNotEmpty()) {
+                    com.example.omnilog.data.firebase.FirebaseSyncManager.removeMemberFromGroupOnCloud(groupName, memberEmail)
+                } else {
+                    // Last member was removed, so group becomes private. Clean up from cloud
+                    val myEmail = userAccount.value?.email ?: "guest@omnilog.com"
+                    com.example.omnilog.data.firebase.FirebaseSyncManager.deleteGroupFromCloud(groupName, invites + myEmail)
+                }
                 
                 withContext(Dispatchers.Main) {
                     _uiState.value = UiState.Success("Removed $memberEmail from group.")
@@ -998,10 +1218,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun deleteSplitGroup(groupName: String) {
         viewModelScope.launch(Dispatchers.IO) {
-            // 1. Remove from local list
-            _customGroups.value = _customGroups.value.filter { it != groupName }
+            // 1. Update the list in customGroups
+            if (_customGroups.value.contains(groupName)) {
+                _customGroups.value = _customGroups.value - groupName
+            }
             
-            // 2. Remove invites
+            // 2. Remove groupInvitedMembers mapping
             val invites = _groupInvitedMembers.value[groupName] ?: emptyList()
             val updatedInvitesMap = _groupInvitedMembers.value.toMutableMap()
             updatedInvitesMap.remove(groupName)
@@ -1016,9 +1238,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
             refreshDataInternal()
             
-            // 4. Sync delete to cloud
-            val members = invites + (userAccount.value?.email ?: "guest@omnilog.com")
-            com.example.omnilog.data.firebase.FirebaseSyncManager.deleteGroupFromCloud(groupName, members)
+            // 4. Sync delete to cloud ONLY if it was shared
+            if (invites.isNotEmpty()) {
+                val members = invites + (userAccount.value?.email ?: "guest@omnilog.com")
+                com.example.omnilog.data.firebase.FirebaseSyncManager.deleteGroupFromCloud(groupName, members)
+            }
             
             withContext(Dispatchers.Main) {
                 _uiState.value = UiState.Success("Group '$groupName' deleted successfully.")
@@ -1044,8 +1268,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
             refreshDataInternal()
 
-            // Push split log to Firebase Realtime Database
-            com.example.omnilog.data.firebase.FirebaseSyncManager.pushSplitExpense(expense)
+            // Push split log to Firebase Realtime Database ONLY if the group is shared (has invited members)
+            val invites = _groupInvitedMembers.value[groupName] ?: emptyList()
+            if (invites.isNotEmpty()) {
+                com.example.omnilog.data.firebase.FirebaseSyncManager.pushSplitExpense(expense)
+            }
 
             notificationManager.sendAlert("New Split Bill", "Split with $splitWith logged successfully.")
             _uiState.value = UiState.Success("Split bill logged.")
@@ -1079,8 +1306,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 }
                 refreshDataInternal()
 
-                // Mark settled on the cloud
-                com.example.omnilog.data.firebase.FirebaseSyncManager.settleSplitExpenseOnCloud(id, groupName)
+                // Mark settled on the cloud ONLY if the group is shared
+                val invites = _groupInvitedMembers.value[groupName] ?: emptyList()
+                if (invites.isNotEmpty()) {
+                    com.example.omnilog.data.firebase.FirebaseSyncManager.settleSplitExpenseOnCloud(id, groupName)
+                }
 
                 notificationManager.sendAlert("Bill Settled", "Split bill has been marked as settled.")
                 _uiState.value = UiState.Success("Bill settled successfully.")
@@ -1102,10 +1332,72 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
             refreshDataInternal()
 
-            // Remove split from cloud
-            com.example.omnilog.data.firebase.FirebaseSyncManager.deleteSplitExpenseOnCloud(id, groupName)
+            // Remove split from cloud ONLY if the group is shared
+            val invites = _groupInvitedMembers.value[groupName] ?: emptyList()
+            if (invites.isNotEmpty()) {
+                com.example.omnilog.data.firebase.FirebaseSyncManager.deleteSplitExpenseOnCloud(id, groupName)
+            }
 
             _uiState.value = UiState.Success("Split expense deleted.")
+        }
+    }
+
+    // --- Admin Master Controllers ---
+    fun updatePrivacyPolicy(newText: String) {
+        _privacyPolicyText.value = newText
+        if (com.example.omnilog.data.firebase.FirebaseSyncManager.isInitialized) {
+            com.example.omnilog.data.firebase.FirebaseSyncManager.updateAppSettings("privacyPolicy", newText)
+            notificationManager.sendAlert("Privacy Policy Updated 🛡️", "The legal Privacy Shield has been synced globally.")
+            _uiState.value = UiState.Success("Privacy Policy updated on Firebase!")
+        } else {
+            notificationManager.sendAlert("Privacy Policy Updated 🛡️", "Saved locally in Sandbox Mode.")
+            _uiState.value = UiState.Success("Privacy Policy updated locally!")
+        }
+    }
+
+    fun updateAboutUs(newText: String) {
+        _aboutUsText.value = newText
+        if (com.example.omnilog.data.firebase.FirebaseSyncManager.isInitialized) {
+            com.example.omnilog.data.firebase.FirebaseSyncManager.updateAppSettings("aboutUs", newText)
+            notificationManager.sendAlert("About Details Updated ℹ️", "App workspace info has been updated globally.")
+            _uiState.value = UiState.Success("About Details updated on Firebase!")
+        } else {
+            notificationManager.sendAlert("About Details Updated ℹ️", "Saved locally in Sandbox Mode.")
+            _uiState.value = UiState.Success("About Details updated locally!")
+        }
+    }
+
+    fun updatePricingPlans(monthly: String, yearly: String, lifetime: String) {
+        _priceMonthlyPlan.value = monthly
+        _priceYearlyPlan.value = yearly
+        if (lifetime.isNotBlank()) {
+            _priceLifetimePlan.value = lifetime
+        }
+        if (com.example.omnilog.data.firebase.FirebaseSyncManager.isInitialized) {
+            com.example.omnilog.data.firebase.FirebaseSyncManager.updateAppSettings("pricingPlanMonthly", monthly)
+            com.example.omnilog.data.firebase.FirebaseSyncManager.updateAppSettings("pricingPlanYearly", yearly)
+            if (lifetime.isNotBlank()) {
+                com.example.omnilog.data.firebase.FirebaseSyncManager.updateAppSettings("pricingPlanLifetime", lifetime)
+            }
+            notificationManager.sendAlert("Premium Pricing Overridden 💸", "Plans modified: Monthly=$monthly · Yearly=$yearly")
+            _uiState.value = UiState.Success("Pricing plans updated on Firebase!")
+        } else {
+            notificationManager.sendAlert("Premium Pricing Updated 💸", "Saved locally in Sandbox Mode.")
+            _uiState.value = UiState.Success("Pricing plans updated locally!")
+        }
+    }
+
+    fun submitInquiry(ticketId: String, email: String, category: String, message: String) {
+        if (com.example.omnilog.data.firebase.FirebaseSyncManager.isInitialized) {
+            com.example.omnilog.data.firebase.FirebaseSyncManager.submitSupportTicket(ticketId, email, category, message)
+        }
+    }
+
+    fun resolveTicket(ticketId: String) {
+        if (com.example.omnilog.data.firebase.FirebaseSyncManager.isInitialized) {
+            com.example.omnilog.data.firebase.FirebaseSyncManager.resolveSupportTicket(ticketId)
+            notificationManager.sendAlert("Support Ticket Resolved ✓", "Ticket $ticketId marked as Resolved in secure logs.")
+            _uiState.value = UiState.Success("Ticket $ticketId resolved!")
         }
     }
 

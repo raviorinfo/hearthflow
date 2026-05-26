@@ -323,9 +323,20 @@ fun LoginScreen(viewModel: MainViewModel, onLoginSuccess: () -> Unit) {
                             if (validate()) {
                                 when (mode) {
                                     AuthMode.REGISTER -> {
-                                        val prefs = context.getSharedPreferences("auth_prefs", android.content.Context.MODE_PRIVATE)
-                                        prefs.edit().putString("saved_password", password).apply()
-                                        viewModel.registerUser(name, email, onLoginSuccess)
+                                        isLoading = true
+                                        viewModel.checkIfAdminRegistered(name, email) { adminExists ->
+                                            if (adminExists) {
+                                                isLoading = false
+                                                errorText = "An Admin account is already registered. Only one Admin is allowed globally."
+                                            } else {
+                                                val prefs = context.getSharedPreferences("auth_prefs", android.content.Context.MODE_PRIVATE)
+                                                prefs.edit().putString("saved_password", password).apply()
+                                                viewModel.registerUser(name, email) {
+                                                    isLoading = false
+                                                    onLoginSuccess()
+                                                }
+                                            }
+                                        }
                                     }
                                     AuthMode.FORGOT_PASSWORD -> {
                                         successText = "Reset link sent to $email"
@@ -344,21 +355,13 @@ fun LoginScreen(viewModel: MainViewModel, onLoginSuccess: () -> Unit) {
                                                 onLoginSuccess()
                                             },
                                             onFailure = { cloudError ->
-                                                // Fallback to local sandbox password check
+                                                // Save password locally and log in offline via Local Sandbox fallback
                                                 val prefs = context.getSharedPreferences("auth_prefs", android.content.Context.MODE_PRIVATE)
-                                                val savedPassword = prefs.getString("saved_password", "admin123")
-                                                val savedEmail = prefs.getString("authenticated_user_email", "guest@omnilog.com")
+                                                prefs.edit().putString("saved_password", password).apply()
                                                 
-                                                if (password == savedPassword && (email == savedEmail || email == "guest@omnilog.com" || email == "user@routinelog.com")) {
+                                                viewModel.loginUserOffline(email) {
                                                     isLoading = false
                                                     onLoginSuccess()
-                                                } else {
-                                                    isLoading = false
-                                                    errorText = if (com.example.omnilog.data.firebase.FirebaseSyncManager.isInitialized) {
-                                                        cloudError
-                                                    } else {
-                                                        "Incorrect local password. Please try again."
-                                                    }
                                                 }
                                             }
                                         )

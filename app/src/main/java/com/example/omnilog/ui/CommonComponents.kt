@@ -878,15 +878,17 @@ fun PremiumFilterChip(
 @Composable
 fun PremiumSubscriptionDialog(
     onDismiss: () -> Unit,
-    onPurchase: (planName: String, durationDays: Long) -> Unit
+    onPurchase: (planName: String, durationDays: Long) -> Unit,
+    monthlyPrice: String = "₹199",
+    yearlyPrice: String = "₹1199",
+    lifetimePrice: String = "₹2999"
 ) {
     var checkoutStep by remember { mutableStateOf(0) } // 0 = Selection, 1 = Checkout form, 2 = Loader, 3 = Success
     var selectedPlanIndex by remember { mutableStateOf(0) }
     
     val plans = listOf(
-        Triple("Monthly Plan", "₹199", 30L),
-        Triple("Yearly Plan", "₹1199", 365L),
-        Triple("Lifetime Plan", "₹2999", 36500L)
+        Triple("Monthly Plan", monthlyPrice, 30L),
+        Triple("Yearly Plan", yearlyPrice, 365L)
     )
 
     // Form inputs for Credit/Debit card

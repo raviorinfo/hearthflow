@@ -43,6 +43,10 @@ fun SplitExpenseScreen(viewModel: MainViewModel) {
     val splitGroups by viewModel.splitGroups.collectAsState()
     val groupInvitedMembers by viewModel.groupInvitedMembers.collectAsState()
 
+    val priceMonthly by viewModel.priceMonthlyPlan.collectAsState()
+    val priceYearly by viewModel.priceYearlyPlan.collectAsState()
+    val priceLifetime by viewModel.priceLifetimePlan.collectAsState()
+
     var showAddSplitDialog by remember { mutableStateOf(false) }
     var showPremiumDialog by remember { mutableStateOf(false) }
     var showInvitationSuccessDialog by remember { mutableStateOf(false) }
@@ -1015,7 +1019,10 @@ fun SplitExpenseScreen(viewModel: MainViewModel) {
             onPurchase = { plan, duration ->
                 viewModel.purchasePremiumPlan(plan, duration)
                 showPremiumDialog = false
-            }
+            },
+            monthlyPrice = priceMonthly,
+            yearlyPrice = priceYearly,
+            lifetimePrice = priceLifetime
         )
     }
 

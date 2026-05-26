@@ -7,6 +7,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
@@ -62,6 +64,16 @@ fun ProfileScreen(viewModel: MainViewModel, onSignOut: () -> Unit = {}) {
     var showContactSuccess by remember { mutableStateOf(false) }
     var generatedTicketId by remember { mutableStateOf("") }
     val cloudSyncStatus by viewModel.cloudSyncStatus.collectAsState()
+
+    val privacyPolicyText by viewModel.privacyPolicyText.collectAsState()
+    val aboutUsText by viewModel.aboutUsText.collectAsState()
+    val priceMonthly by viewModel.priceMonthlyPlan.collectAsState()
+    val priceYearly by viewModel.priceYearlyPlan.collectAsState()
+    val priceLifetime by viewModel.priceLifetimePlan.collectAsState()
+    val isAdmin by viewModel.isAdminUser.collectAsState()
+    val supportTickets by viewModel.supportTickets.collectAsState()
+
+    var showAdminConsoleDialog by remember { mutableStateOf(false) }
 
     LaunchedEffect(userAccount) {
         if (contactEmail.isEmpty() && userAccount != null) {
@@ -756,6 +768,40 @@ fun ProfileScreen(viewModel: MainViewModel, onSignOut: () -> Unit = {}) {
                             Icon(Icons.Default.ChevronRight, null, tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f), modifier = Modifier.size(18.dp))
                         }
 
+                        // ⚙️ Admin Console Master Row (exclusive to Admin users)
+                        if (isAdmin) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(
+                                        Brush.horizontalGradient(
+                                            listOf(BrandViolet.copy(alpha = 0.15f), BrandCyan.copy(alpha = 0.15f))
+                                        )
+                                    )
+                                    .border(
+                                        width = 1.dp,
+                                        brush = Brush.horizontalGradient(listOf(BrandViolet, BrandCyan)),
+                                        shape = RoundedCornerShape(12.dp)
+                                    )
+                                    .clickable { showAdminConsoleDialog = true }
+                                    .padding(horizontal = 14.dp, vertical = 10.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(Icons.Default.Settings, null, tint = BrandViolet, modifier = Modifier.size(20.dp))
+                                    Spacer(Modifier.width(12.dp))
+                                    Text(
+                                        text = "⚙️ Admin Master Console",
+                                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                                        color = BrandViolet
+                                    )
+                                }
+                                Icon(Icons.Default.ChevronRight, null, tint = BrandViolet, modifier = Modifier.size(18.dp))
+                            }
+                        }
+
                         HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
 
                         // Database Encryption Row
@@ -840,7 +886,10 @@ fun ProfileScreen(viewModel: MainViewModel, onSignOut: () -> Unit = {}) {
             onPurchase = { plan, duration ->
                 viewModel.purchasePremiumPlan(plan, duration)
                 showPremiumDialog = false
-            }
+            },
+            monthlyPrice = priceMonthly,
+            yearlyPrice = priceYearly,
+            lifetimePrice = priceLifetime
         )
     }
 
@@ -911,7 +960,7 @@ fun ProfileScreen(viewModel: MainViewModel, onSignOut: () -> Unit = {}) {
                             .padding(horizontal = 10.dp, vertical = 4.dp)
                     )
                     Text(
-                        text = "RoutineLog is a premium hybrid financial ledger designed for absolute privacy, speed, and visual elegance. It operates seamlessly in both local offline sandbox and secure cloud-synced sharing modes.",
+                        text = aboutUsText,
                         style = MaterialTheme.typography.bodyMedium,
                         textAlign = TextAlign.Center,
                         color = MaterialTheme.colorScheme.onSurface
@@ -1080,27 +1129,10 @@ fun ProfileScreen(viewModel: MainViewModel, onSignOut: () -> Unit = {}) {
                     }
                     
                     Text(
-                        text = "• On-Device Sandbox (Offline Mode): By default, all debt roadmaps, asset portfolios, personal finance items, and pantry logs reside solely inside your local SQLite database. Toggle core encryption to secure your records with AES-256 on-device key locks.",
+                        text = privacyPolicyText,
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    
-                    Text(
-                        text = "• Secure Group Syncing (Online Mode): Collaborating with family members dynamically syncs shared group ledger nodes via secure Firebase trees. Private personal ledgers, asset items, or daily targets are strictly kept offline and never synced.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-
-                    Text(
-                        text = "• Cryptographic Key Control: In AES-256 encrypted database mode, decryption keys are kept locally. They are never uploaded, shared, or backed up remotely. Be sure to keep your password and keys secure.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    
-                    Text(
-                        text = "• Zero-Tracker Promise: RoutineLog has no telemetry frameworks, advertising SDKs, background behavioral scrapers, or third-party marketing services.",
-                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                        color = BrandEmerald
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.verticalScroll(rememberScrollState()).heightIn(max = 260.dp)
                     )
                 }
             },
@@ -1301,8 +1333,9 @@ fun ProfileScreen(viewModel: MainViewModel, onSignOut: () -> Unit = {}) {
                                 if (isValid && !isSubmittingContact) {
                                     scope.launch {
                                         isSubmittingContact = true
-                                        delay(1800) // Simulated secure cryptoprocess request submission
+                                        delay(1800)
                                         generatedTicketId = "RTL-${(1000..9999).random()}-SEC"
+                                        viewModel.submitInquiry(generatedTicketId, contactEmail, contactCategory, contactMessage)
                                         isSubmittingContact = false
                                         showContactSuccess = true
                                         viewModel.sendSupportTicketNotification(generatedTicketId, contactCategory)
@@ -1325,6 +1358,292 @@ fun ProfileScreen(viewModel: MainViewModel, onSignOut: () -> Unit = {}) {
                             }
                         }
                     }
+                }
+            },
+            containerColor = MaterialTheme.colorScheme.surface,
+            shape = RoundedCornerShape(20.dp)
+        )
+    }
+
+    // ⚙️ Admin Master Console Dialog
+    if (showAdminConsoleDialog) {
+        var adminTab by remember { mutableStateOf("Legals") }
+        var editedPrivacyText by remember(privacyPolicyText) { mutableStateOf(privacyPolicyText) }
+        var editedAboutText by remember(aboutUsText) { mutableStateOf(aboutUsText) }
+        var editedPriceMonthly by remember(priceMonthly) { mutableStateOf(priceMonthly) }
+        var editedPriceYearly by remember(priceYearly) { mutableStateOf(priceYearly) }
+
+        AlertDialog(
+            onDismissRequest = { showAdminConsoleDialog = false },
+            icon = {
+                Icon(Icons.Default.Settings, null, tint = BrandViolet, modifier = Modifier.size(32.dp))
+            },
+            title = {
+                GradientText(
+                    text = "Admin Master Console",
+                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Black)
+                )
+            },
+            text = {
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    modifier = Modifier.fillMaxWidth().padding(top = 4.dp)
+                ) {
+                    // Navigation Tabs
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        val tabs = listOf("Legals" to "📝 Legals", "Pricing" to "💸 Pricing", "Tickets" to "🎟️ Tickets")
+                        tabs.forEach { (tabId, label) ->
+                            val isSelected = adminTab == tabId
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(if (isSelected) BrandViolet.copy(alpha = 0.15f) else Color.Transparent)
+                                    .border(
+                                        width = 0.5.dp,
+                                        color = if (isSelected) BrandViolet else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f),
+                                        shape = RoundedCornerShape(8.dp)
+                                    )
+                                    .clickable { adminTab = tabId }
+                                    .padding(vertical = 8.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = label,
+                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                    color = if (isSelected) BrandViolet else MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+                        }
+                    }
+
+                    HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
+
+                    // Tab Contents
+                    when (adminTab) {
+                        "Legals" -> {
+                            Column(
+                                verticalArrangement = Arrangement.spacedBy(10.dp),
+                                modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).heightIn(max = 320.dp)
+                            ) {
+                                Text(
+                                    text = "About Us Workspace Info",
+                                    style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                OutlinedTextField(
+                                    value = editedAboutText,
+                                    onValueChange = { editedAboutText = it },
+                                    modifier = Modifier.fillMaxWidth().height(80.dp),
+                                    maxLines = 4,
+                                    singleLine = false,
+                                    colors = getDynamicTextFieldColors(BrandCyan)
+                                )
+
+                                Spacer(Modifier.height(4.dp))
+
+                                Text(
+                                    text = "Privacy Policy Guidelines Text",
+                                    style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                OutlinedTextField(
+                                    value = editedPrivacyText,
+                                    onValueChange = { editedPrivacyText = it },
+                                    modifier = Modifier.fillMaxWidth().height(140.dp),
+                                    maxLines = 8,
+                                    singleLine = false,
+                                    colors = getDynamicTextFieldColors(BrandEmerald)
+                                )
+
+                                Button(
+                                    onClick = {
+                                        viewModel.updatePrivacyPolicy(editedPrivacyText)
+                                        viewModel.updateAboutUs(editedAboutText)
+                                    },
+                                    shape = RoundedCornerShape(10.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = BrandCyan),
+                                    modifier = Modifier.fillMaxWidth().pressScale().padding(top = 4.dp)
+                                ) {
+                                    Text("💾 Sync Legals to Cloud", fontWeight = FontWeight.Bold, color = Color.White)
+                                }
+                            }
+                        }
+                        "Pricing" -> {
+                            Column(
+                                verticalArrangement = Arrangement.spacedBy(10.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text(
+                                    text = "Modify active pricing tiers for standard checkouts dynamically:",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+
+                                OutlinedTextField(
+                                    value = editedPriceMonthly,
+                                    onValueChange = { editedPriceMonthly = it },
+                                    label = { Text("Monthly Plan (e.g. ₹199)") },
+                                    singleLine = true,
+                                    modifier = Modifier.fillMaxWidth(),
+                                    colors = getDynamicTextFieldColors(BrandViolet)
+                                )
+
+                                OutlinedTextField(
+                                    value = editedPriceYearly,
+                                    onValueChange = { editedPriceYearly = it },
+                                    label = { Text("Yearly Plan (e.g. ₹1199)") },
+                                    singleLine = true,
+                                    modifier = Modifier.fillMaxWidth(),
+                                    colors = getDynamicTextFieldColors(BrandViolet)
+                                )
+
+                                Text(
+                                    text = "💡 Sub-hint: Modified prices immediately override dynamic paywall selectors globally in real-time.",
+                                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+
+                                Button(
+                                    onClick = {
+                                        viewModel.updatePricingPlans(editedPriceMonthly, editedPriceYearly, "")
+                                    },
+                                    shape = RoundedCornerShape(10.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = BrandViolet),
+                                    modifier = Modifier.fillMaxWidth().pressScale()
+                                ) {
+                                    Text("💸 Publish New Pricing", fontWeight = FontWeight.Bold, color = Color.White)
+                                }
+                            }
+                        }
+                        "Tickets" -> {
+                            Column(
+                                verticalArrangement = Arrangement.spacedBy(10.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                if (supportTickets.isEmpty()) {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .background(BrandEmerald.copy(alpha = 0.08f), RoundedCornerShape(12.dp))
+                                            .border(0.5.dp, BrandEmerald.copy(alpha = 0.25f), RoundedCornerShape(12.dp))
+                                            .padding(16.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text = "🎉 Zero active support tickets!\nOutstanding work.",
+                                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                                            color = BrandEmerald,
+                                            textAlign = TextAlign.Center
+                                        )
+                                    }
+                                } else {
+                                    Column(
+                                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                                        modifier = Modifier.fillMaxWidth().heightIn(max = 300.dp).verticalScroll(rememberScrollState())
+                                    ) {
+                                        supportTickets.forEach { ticket ->
+                                            val tId = ticket["ticketId"] as? String ?: ""
+                                            val email = ticket["email"] as? String ?: ""
+                                            val cat = ticket["category"] as? String ?: ""
+                                            val msg = ticket["message"] as? String ?: ""
+                                            val status = ticket["status"] as? String ?: "Received"
+                                            val isResolved = status.equals("Resolved", ignoreCase = true)
+
+                                            Box(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .background(
+                                                        if (isResolved) BrandEmerald.copy(alpha = 0.05f) 
+                                                        else BrandViolet.copy(alpha = 0.05f), 
+                                                        RoundedCornerShape(10.dp)
+                                                    )
+                                                    .border(
+                                                        width = 0.5.dp,
+                                                        color = if (isResolved) BrandEmerald.copy(alpha = 0.25f) 
+                                                                else BrandViolet.copy(alpha = 0.25f),
+                                                        shape = RoundedCornerShape(10.dp)
+                                                    )
+                                                    .padding(10.dp)
+                                            ) {
+                                                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                                    Row(
+                                                        modifier = Modifier.fillMaxWidth(),
+                                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                                        verticalAlignment = Alignment.CenterVertically
+                                                    ) {
+                                                        Text(
+                                                            text = tId,
+                                                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold, letterSpacing = 0.5.sp),
+                                                            color = BrandGold
+                                                        )
+                                                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                                            // Category Badge
+                                                            Text(
+                                                                text = cat,
+                                                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                                                color = BrandViolet,
+                                                                modifier = Modifier
+                                                                    .background(BrandViolet.copy(alpha = 0.1f), RoundedCornerShape(4.dp))
+                                                                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                                                            )
+                                                            // Status Badge
+                                                            Text(
+                                                                text = status,
+                                                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                                                color = if (isResolved) BrandEmerald else BrandAmber,
+                                                                modifier = Modifier
+                                                                    .background(
+                                                                        if (isResolved) BrandEmerald.copy(alpha = 0.1f) 
+                                                                        else BrandAmber.copy(alpha = 0.1f), 
+                                                                        RoundedCornerShape(4.dp)
+                                                                    )
+                                                                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                                                            )
+                                                        }
+                                                    }
+                                                    Text(
+                                                        text = "From: $email",
+                                                        style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
+                                                        color = MaterialTheme.colorScheme.onSurface
+                                                    )
+                                                    Text(
+                                                        text = msg,
+                                                        style = MaterialTheme.typography.bodySmall,
+                                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                    )
+                                                    if (!isResolved) {
+                                                        Button(
+                                                            onClick = { viewModel.resolveTicket(tId) },
+                                                            shape = RoundedCornerShape(8.dp),
+                                                            colors = ButtonDefaults.buttonColors(containerColor = BrandEmerald),
+                                                            modifier = Modifier.align(Alignment.End).height(28.dp).pressScale(),
+                                                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp)
+                                                        ) {
+                                                            Text("✓ Resolve Ticket", style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold), color = Color.White)
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = { showAdminConsoleDialog = false },
+                    shape = RoundedCornerShape(10.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = BrandViolet),
+                    modifier = Modifier.pressScale().fillMaxWidth()
+                ) {
+                    Text("Close Panel", fontWeight = FontWeight.Bold, color = Color.White)
                 }
             },
             containerColor = MaterialTheme.colorScheme.surface,
