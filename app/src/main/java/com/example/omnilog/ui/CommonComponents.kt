@@ -435,7 +435,10 @@ fun GlassOmniBar(
 
 // ─── Log Item ────────────────────────────────────────────────────────────────
 @Composable
-fun LogItem(log: com.example.omnilog.data.model.LogEntry) {
+fun LogItem(
+    log: com.example.omnilog.data.model.LogEntry,
+    onDeleteClick: (() -> Unit)? = null
+) {
     var visible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { visible = true }
 
@@ -473,7 +476,10 @@ fun LogItem(log: com.example.omnilog.data.model.LogEntry) {
                 .background(bg)
                 .border(1.dp, borderBrush, RoundedCornerShape(18.dp))
         ) {
-            Row(modifier = Modifier.padding(16.dp)) {
+            Row(
+                modifier = Modifier.padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
                 // Gradient category strip
                 Box(
                     modifier = Modifier
@@ -481,7 +487,6 @@ fun LogItem(log: com.example.omnilog.data.model.LogEntry) {
                         .height(44.dp)
                         .clip(RoundedCornerShape(2.dp))
                         .background(categoryGradient)
-                        .align(Alignment.CenterVertically)
                 )
                 Spacer(Modifier.width(14.dp))
                 Column(modifier = Modifier.weight(1f)) {
@@ -537,6 +542,20 @@ fun LogItem(log: com.example.omnilog.data.model.LogEntry) {
                             java.text.SimpleDateFormat("MMM dd, HH:mm", java.util.Locale.getDefault()).format(log.timestamp),
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.outline
+                        )
+                    }
+                }
+                if (onDeleteClick != null) {
+                    Spacer(Modifier.width(10.dp))
+                    IconButton(
+                        onClick = onDeleteClick,
+                        modifier = Modifier.size(36.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Delete,
+                            contentDescription = "Delete Log",
+                            tint = Color(0xFFEF4444).copy(alpha = 0.85f),
+                            modifier = Modifier.size(20.dp)
                         )
                     }
                 }

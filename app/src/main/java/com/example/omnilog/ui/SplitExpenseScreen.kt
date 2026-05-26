@@ -2,6 +2,7 @@ package com.example.omnilog.ui
 
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -45,6 +46,7 @@ fun SplitExpenseScreen(viewModel: MainViewModel) {
     var showAddSplitDialog by remember { mutableStateOf(false) }
     var showPremiumDialog by remember { mutableStateOf(false) }
     var showInvitationSuccessDialog by remember { mutableStateOf(false) }
+    var showManageGroupDialog by remember { mutableStateOf(false) }
     var lastCreatedGroupName by remember { mutableStateOf("") }
     var lastInvitedContacts by remember { mutableStateOf<List<String>>(emptyList()) }
     var selectedTab by remember { mutableStateOf("Active") } // "Active" or "Settled History"
@@ -305,6 +307,35 @@ fun SplitExpenseScreen(viewModel: MainViewModel) {
                                 style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
                                 color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurface
                             )
+                        }
+                    }
+
+                    // "⚙️ Manage" Pill (Visible when a custom group is selected)
+                    if (selectedGroup != "All") {
+                        item {
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(20.dp))
+                                    .background(BrandCyan.copy(alpha = 0.15f))
+                                    .border(
+                                        1.dp,
+                                        BrandCyan.copy(alpha = 0.5f),
+                                        RoundedCornerShape(20.dp)
+                                    )
+                                    .clickable { showManageGroupDialog = true }
+                                    .pressScale()
+                                    .padding(horizontal = 14.dp, vertical = 6.dp)
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(Icons.Default.Settings, null, tint = BrandCyan, modifier = Modifier.size(14.dp))
+                                    Spacer(Modifier.width(4.dp))
+                                    Text(
+                                        text = "Manage",
+                                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                                        color = BrandCyan
+                                    )
+                                }
+                            }
                         }
                     }
                     
@@ -987,6 +1018,280 @@ fun SplitExpenseScreen(viewModel: MainViewModel) {
             }
         )
     }
+
+    if (showManageGroupDialog && selectedGroup != "All") {
+        ManageGroupDialog(
+            groupName = selectedGroup,
+            members = groupInvitedMembers[selectedGroup] ?: emptyList(),
+            onDismiss = { showManageGroupDialog = false },
+            onUpdateName = { oldName, newName ->
+                viewModel.updateSplitGroup(oldName, newName)
+                selectedGroup = newName
+                showManageGroupDialog = false
+            },
+            onAddMember = { name, email ->
+                viewModel.addMemberToGroup(name, email)
+            },
+            onRemoveMember = { name, email ->
+                viewModel.removeMemberFromGroup(name, email)
+            },
+            onDeleteGroup = { name ->
+                viewModel.deleteSplitGroup(name)
+                selectedGroup = "All"
+                showManageGroupDialog = false
+            }
+        )
+    }
+}
+
+@Composable
+fun ManageGroupDialog(
+    groupName: String,
+    members: List<String>,
+    onDismiss: () -> Unit,
+    onUpdateName: (oldName: String, newName: String) -> Unit,
+    onAddMember: (groupName: String, email: String) -> Unit,
+    onRemoveMember: (groupName: String, email: String) -> Unit,
+    onDeleteGroup: (groupName: String) -> Unit
+) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val isDark = androidx.compose.foundation.isSystemInDarkTheme()
+
+    var editedName by remember { mutableStateOf(groupName) }
+    var newMemberEmail by remember { mutableStateOf("") }
+    var showDeleteConfirm by remember { mutableStateOf(false) }
+
+    @Composable
+    fun getDynamicTextFieldColors(accentColor: Color) = OutlinedTextFieldDefaults.colors(
+        focusedTextColor = MaterialTheme.colorScheme.onSurface,
+        unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
+        focusedBorderColor = accentColor,
+        unfocusedBorderColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
+        focusedLabelColor = accentColor,
+        unfocusedLabelColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+        cursorColor = accentColor,
+        focusedContainerColor = if (isDark) Color(0xFF1C2438) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+        unfocusedContainerColor = if (isDark) Color(0xFF131929) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f)
+    )
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            GradientText(
+                text = "Manage Group: $groupName",
+                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
+            )
+        },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                if (showDeleteConfirm) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(BrandRose.copy(alpha = 0.1f))
+                            .border(1.dp, BrandRose.copy(alpha = 0.3f), RoundedCornerShape(12.dp))
+                            .padding(14.dp)
+                    ) {
+                        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Text(
+                                text = "⚠️ Are you absolutely sure?",
+                                style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                                color = BrandRose
+                            )
+                            Text(
+                                text = "Deleting '$groupName' will permanently remove the group and delete all associated splits and bills in this ledger from both local storage and the cloud. This cannot be undone.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Button(
+                                    onClick = { onDeleteGroup(groupName) },
+                                    colors = ButtonDefaults.buttonColors(containerColor = BrandRose),
+                                    modifier = Modifier.weight(1f),
+                                    shape = RoundedCornerShape(8.dp)
+                                ) {
+                                    Text("Yes, Delete", color = Color.White, fontWeight = FontWeight.Bold)
+                                }
+                                OutlinedButton(
+                                    onClick = { showDeleteConfirm = false },
+                                    modifier = Modifier.weight(1f),
+                                    shape = RoundedCornerShape(8.dp)
+                                ) {
+                                    Text("Cancel", color = MaterialTheme.colorScheme.onSurface)
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text(
+                            text = "Group Display Name",
+                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                            color = BrandCyan
+                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            OutlinedTextField(
+                                value = editedName,
+                                onValueChange = { editedName = it },
+                                modifier = Modifier.weight(1f),
+                                colors = getDynamicTextFieldColors(BrandCyan),
+                                singleLine = true
+                            )
+                            Button(
+                                onClick = {
+                                    if (editedName.isNotBlank() && editedName.trim() != groupName) {
+                                        onUpdateName(groupName, editedName.trim())
+                                    }
+                                },
+                                shape = RoundedCornerShape(10.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = BrandCyan),
+                                modifier = Modifier.height(56.dp),
+                                enabled = editedName.isNotBlank() && editedName.trim() != groupName
+                            ) {
+                                Text("Save", fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(
+                            text = "Group Members (${members.size})",
+                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                            color = BrandViolet
+                        )
+
+                        if (members.isEmpty()) {
+                            Text(
+                                text = "No other members in this group yet. Add friends below to start splitting!",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.outline,
+                                modifier = Modifier.padding(vertical = 4.dp)
+                            )
+                        } else {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(if (isDark) Color.White.copy(alpha = 0.05f) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f))
+                                    .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f), RoundedCornerShape(12.dp))
+                                    .padding(8.dp),
+                                verticalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                members.forEach { email ->
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(horizontal = 8.dp, vertical = 6.dp),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                                            Text("👤", fontSize = 16.sp)
+                                            Spacer(Modifier.width(8.dp))
+                                            Text(
+                                                text = email,
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                color = MaterialTheme.colorScheme.onSurface
+                                            )
+                                        }
+                                        IconButton(
+                                            onClick = { onRemoveMember(groupName, email) },
+                                            modifier = Modifier.size(24.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Delete,
+                                                contentDescription = "Remove member",
+                                                tint = BrandRose,
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        Spacer(Modifier.height(4.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            OutlinedTextField(
+                                value = newMemberEmail,
+                                onValueChange = { newMemberEmail = it },
+                                label = { Text("Invite contact email/phone...") },
+                                modifier = Modifier.weight(1f),
+                                colors = getDynamicTextFieldColors(BrandViolet),
+                                singleLine = true
+                            )
+                            Button(
+                                onClick = {
+                                    if (newMemberEmail.isNotBlank()) {
+                                        onAddMember(groupName, newMemberEmail.trim())
+                                        newMemberEmail = ""
+                                    }
+                                },
+                                shape = RoundedCornerShape(10.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = BrandViolet),
+                                modifier = Modifier.height(56.dp),
+                                enabled = newMemberEmail.isNotBlank()
+                            ) {
+                                Icon(Icons.Default.Add, null, tint = Color.White)
+                            }
+                        }
+                    }
+
+                    Spacer(Modifier.height(10.dp))
+
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text(
+                            text = "Danger Zone",
+                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                            color = BrandRose
+                        )
+                        OutlinedButton(
+                            onClick = { showDeleteConfirm = true },
+                            colors = ButtonDefaults.outlinedButtonColors(containerColor = Color.Transparent),
+                            border = BorderStroke(1.dp, BrandRose.copy(alpha = 0.5f)),
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Icon(Icons.Default.DeleteForever, null, tint = BrandRose, modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text("Delete Group Permanently", color = BrandRose, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            if (!showDeleteConfirm) {
+                Button(
+                    onClick = onDismiss,
+                    shape = RoundedCornerShape(10.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                ) {
+                    Text("Close", fontWeight = FontWeight.Bold)
+                }
+            }
+        },
+        containerColor = MaterialTheme.colorScheme.surface,
+        modifier = Modifier.border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.2f), RoundedCornerShape(28.dp))
+    )
 }
 
 @Composable
@@ -1257,10 +1562,11 @@ fun AddSplitDialog(
     var customMemberInput by remember { mutableStateOf("") }
 
     // Dynamic equal division calculations
-    val totalSelected = selectedMembers.size
-    val calculatedShare: Double = remember(totalAmountStr, totalSelected) {
+    val containsPayer = selectedMembers.contains(paidBy)
+    val totalPeople = if (containsPayer) selectedMembers.size else (selectedMembers.size + 1)
+    val calculatedShare: Double = remember(totalAmountStr, totalPeople) {
         val total = totalAmountStr.toDoubleOrNull() ?: 0.0
-        if (totalSelected > 0) total / totalSelected else 0.0
+        if (totalPeople > 0) total / totalPeople else 0.0
     }
 
     AlertDialog(
@@ -1485,8 +1791,9 @@ fun AddSplitDialog(
                 }
 
                 // Dynamic Split Banner
-                if (totalSelected > 0 && calculatedShare > 0.0) {
-                    val isFourWaySplit = totalSelected == 4 && selectedMembers.contains(paidBy) && paidBy.equals("You", ignoreCase = true)
+                if (totalPeople > 0 && calculatedShare > 0.0) {
+                    val membersToDisplay = if (containsPayer) selectedMembers.toList() else (listOf(paidBy) + selectedMembers)
+                    val isFourWaySplit = totalPeople == 4 && paidBy.equals("You", ignoreCase = true)
                     
                     Column(
                         modifier = Modifier
@@ -1516,9 +1823,9 @@ fun AddSplitDialog(
                                 color = BrandCyan
                             )
                             Spacer(Modifier.height(4.dp))
-                            val membersListText = selectedMembers.joinToString(", ")
+                            val membersListText = membersToDisplay.joinToString(", ")
                             Text(
-                                text = "Splitting ${formatCurrency(totalAmountStr.toDoubleOrNull() ?: 0.0)} equally among $totalSelected members: $membersListText.",
+                                text = "Splitting ${formatCurrency(totalAmountStr.toDoubleOrNull() ?: 0.0)} equally among $totalPeople members: $membersListText.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurface
                             )
@@ -1540,7 +1847,7 @@ fun AddSplitDialog(
             Button(
                 onClick = {
                     if (isButtonEnabled) {
-                        val isFourWaySplit = selectedMembers.size == 4 && selectedMembers.contains(paidBy) && paidBy.equals("You", ignoreCase = true)
+                        val isFourWaySplit = totalPeople == 4 && paidBy.equals("You", ignoreCase = true)
                         
                         selectedMembers.filter { it != paidBy }.forEach { member ->
                             onSave(title, totalVal, paidBy, member, calculatedShare, selectedGroupInput)

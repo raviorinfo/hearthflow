@@ -21,6 +21,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
@@ -32,6 +33,8 @@ import com.example.omnilog.ui.theme.BrandGold
 import com.example.omnilog.ui.theme.BrandGradientEnd
 import com.example.omnilog.ui.theme.BrandGradientMid
 import com.example.omnilog.ui.theme.BrandGradientStart
+import com.example.omnilog.ui.theme.BrandEmerald
+import com.example.omnilog.ui.theme.BrandAmber
 import com.example.omnilog.viewmodel.MainViewModel
 
 sealed class Screen(val route: String, val title: String, val icon: ImageVector) {
@@ -175,7 +178,40 @@ fun MainScreen(viewModel: MainViewModel = viewModel()) {
                                     }
                                 }
                             },
-                            actions = {}
+                            actions = {
+                                val syncStatus by viewModel.cloudSyncStatus.collectAsState()
+                                val isConnected = syncStatus.contains("Connected")
+                                Box(
+                                    modifier = Modifier
+                                        .padding(end = 16.dp)
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(
+                                            if (isConnected) BrandEmerald.copy(alpha = 0.15f)
+                                            else BrandAmber.copy(alpha = 0.15f)
+                                        )
+                                        .border(
+                                            width = 0.5.dp,
+                                            color = if (isConnected) BrandEmerald.copy(alpha = 0.5f) else BrandAmber.copy(alpha = 0.5f),
+                                            shape = RoundedCornerShape(12.dp)
+                                        )
+                                        .padding(horizontal = 10.dp, vertical = 5.dp)
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(6.dp)
+                                                .clip(CircleShape)
+                                                .background(if (isConnected) BrandEmerald else BrandAmber)
+                                        )
+                                        Spacer(Modifier.width(6.dp))
+                                        Text(
+                                            text = syncStatus,
+                                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                            color = if (isConnected) BrandEmerald else BrandAmber
+                                        )
+                                    }
+                                }
+                            }
                         )
                     }
                 }

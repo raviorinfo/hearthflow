@@ -12,6 +12,12 @@ interface LogDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     fun insertLog(log: LogEntry)
 
+    @Query("DELETE FROM log_entries WHERE id = :id")
+    fun deleteLog(id: Long)
+
+    @Query("DELETE FROM log_entries WHERE groupId = :groupId")
+    fun deleteLogGroupByGroupId(groupId: String)
+
     @Query("SELECT * FROM inventory")
     fun getAllInventorySync(): List<InventoryItem>
 
@@ -60,7 +66,7 @@ interface LogDao {
     fun getAllSplitExpensesSync(): List<SplitExpenseEntry>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    fun insertSplitExpense(expense: SplitExpenseEntry)
+    fun insertSplitExpense(expense: SplitExpenseEntry): Long
 
     @Query("DELETE FROM split_expenses WHERE id = :id")
     fun deleteSplitExpense(id: Long)

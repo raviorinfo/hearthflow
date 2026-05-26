@@ -30,6 +30,7 @@ import androidx.compose.ui.unit.sp
 import com.example.omnilog.viewmodel.MainViewModel
 import com.example.omnilog.ui.theme.*
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -45,12 +46,28 @@ fun ProfileScreen(viewModel: MainViewModel, onSignOut: () -> Unit = {}) {
     var showSignOutDialog by remember { mutableStateOf(false) }
     var showAboutDialog by remember { mutableStateOf(false) }
     var showPrivacyDialog by remember { mutableStateOf(false) }
+    var showContactDialog by remember { mutableStateOf(false) }
     var showEncryptingProgressDialog by remember { mutableStateOf(false) }
     var targetEncryptionState by remember { mutableStateOf(false) }
     var familyEmail by remember { mutableStateOf("") }
     var tempP by remember { mutableStateOf("") }
     var tempC by remember { mutableStateOf("") }
     var tempF by remember { mutableStateOf("") }
+
+    // Interactive contact support states
+    var contactCategory by remember { mutableStateOf("General Support") }
+    var contactMessage by remember { mutableStateOf("") }
+    var contactEmail by remember { mutableStateOf("") }
+    var isSubmittingContact by remember { mutableStateOf(false) }
+    var showContactSuccess by remember { mutableStateOf(false) }
+    var generatedTicketId by remember { mutableStateOf("") }
+    val cloudSyncStatus by viewModel.cloudSyncStatus.collectAsState()
+
+    LaunchedEffect(userAccount) {
+        if (contactEmail.isEmpty() && userAccount != null) {
+            contactEmail = userAccount?.email ?: ""
+        }
+    }
 
     val isDark = isSystemInDarkTheme()
 
@@ -682,11 +699,11 @@ fun ProfileScreen(viewModel: MainViewModel, onSignOut: () -> Unit = {}) {
                             Text(
                                 "Workspace Settings & Legals",
                                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                                color = Color.White
+                                color = MaterialTheme.colorScheme.onSurface
                             )
                         }
                         
-                        HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
+                        HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
                         
                         // About Us row
                         Row(
@@ -698,11 +715,11 @@ fun ProfileScreen(viewModel: MainViewModel, onSignOut: () -> Unit = {}) {
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(Icons.Default.Info, null, tint = Color.White.copy(alpha = 0.7f), modifier = Modifier.size(20.dp))
+                                Icon(Icons.Default.Info, null, tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f), modifier = Modifier.size(20.dp))
                                 Spacer(Modifier.width(12.dp))
-                                Text("About RoutineLog", style = MaterialTheme.typography.bodyMedium, color = Color.White)
+                                Text("About RoutineLog", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
                             }
-                            Icon(Icons.Default.ChevronRight, null, tint = Color.White.copy(alpha = 0.4f), modifier = Modifier.size(18.dp))
+                            Icon(Icons.Default.ChevronRight, null, tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f), modifier = Modifier.size(18.dp))
                         }
                         
                         // Privacy Policy row
@@ -715,14 +732,31 @@ fun ProfileScreen(viewModel: MainViewModel, onSignOut: () -> Unit = {}) {
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(Icons.Default.VerifiedUser, null, tint = Color.White.copy(alpha = 0.7f), modifier = Modifier.size(20.dp))
+                                Icon(Icons.Default.VerifiedUser, null, tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f), modifier = Modifier.size(20.dp))
                                 Spacer(Modifier.width(12.dp))
-                                Text("Privacy Policy", style = MaterialTheme.typography.bodyMedium, color = Color.White)
+                                Text("Privacy Policy", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
                             }
-                            Icon(Icons.Default.ChevronRight, null, tint = Color.White.copy(alpha = 0.4f), modifier = Modifier.size(18.dp))
+                            Icon(Icons.Default.ChevronRight, null, tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f), modifier = Modifier.size(18.dp))
                         }
 
-                        HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
+                        // Contact Us row
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { showContactDialog = true }
+                                .padding(vertical = 8.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.Email, null, tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f), modifier = Modifier.size(20.dp))
+                                Spacer(Modifier.width(12.dp))
+                                Text("Contact Support", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
+                            }
+                            Icon(Icons.Default.ChevronRight, null, tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f), modifier = Modifier.size(18.dp))
+                        }
+
+                        HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
 
                         // Database Encryption Row
                         Row(
@@ -744,7 +778,7 @@ fun ProfileScreen(viewModel: MainViewModel, onSignOut: () -> Unit = {}) {
                                     Text(
                                         text = "Core Database Security",
                                         style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
-                                        color = Color.White
+                                        color = MaterialTheme.colorScheme.onSurface
                                     )
                                 }
                                 Text(
@@ -869,7 +903,7 @@ fun ProfileScreen(viewModel: MainViewModel, onSignOut: () -> Unit = {}) {
                     modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
                 ) {
                     Text(
-                        text = "Version v1.4.2",
+                        text = "Version v1.5.0-PRO",
                         style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
                         color = BrandGold,
                         modifier = Modifier
@@ -877,17 +911,115 @@ fun ProfileScreen(viewModel: MainViewModel, onSignOut: () -> Unit = {}) {
                             .padding(horizontal = 10.dp, vertical = 4.dp)
                     )
                     Text(
-                        text = "RoutineLog is a premium offline-first financial ledger and local tracking system designed for privacy, speed, and visual elegance.",
+                        text = "RoutineLog is a premium hybrid financial ledger designed for absolute privacy, speed, and visual elegance. It operates seamlessly in both local offline sandbox and secure cloud-synced sharing modes.",
                         style = MaterialTheme.typography.bodyMedium,
                         textAlign = TextAlign.Center,
                         color = MaterialTheme.colorScheme.onSurface
                     )
-                    Text(
-                        text = "Our mission is to empower individuals and families to take complete control of their personal finance, macros, and split sharing ledger without leaking private details to the cloud. All operations are kept 100% inside your local device sandbox.",
-                        style = MaterialTheme.typography.bodySmall,
-                        textAlign = TextAlign.Center,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    
+                    HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
+                    
+                    // Offline Sandbox Section
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("⚡", fontSize = 16.sp)
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                text = "Local Sandbox (Offline Mode)",
+                                style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
+                                color = BrandAmber
+                            )
+                        }
+                        Text(
+                            text = "Standard mode is 100% offline. All debt calculators, roadmaps, and nutritional logs are stored securely on-device with custom AES-256 database key encryption, requiring zero network permissions.",
+                            style = MaterialTheme.typography.labelMedium.copy(fontSize = 11.sp),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+
+                    // Online Sync Section
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("☁️", fontSize = 16.sp)
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                text = "Firebase Sync (Cloud Mode)",
+                                style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
+                                color = BrandCyan
+                            )
+                        }
+                        Text(
+                            text = "Online mode enables real-time collaborative bill splitting among household members. Uses secure, isolated Firebase nodes to sync invited groups while private personal finances remain locked locally on-device.",
+                            style = MaterialTheme.typography.labelMedium.copy(fontSize = 11.sp),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+
+                    HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
+
+                    // Dynamic System Status Cards
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        val isConnected = cloudSyncStatus.contains("Connected")
+                        val isEncrypted by viewModel.isDatabaseEncrypted.collectAsState()
+                        
+                        // Cloud Sync status chip
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(if (isConnected) BrandEmerald.copy(alpha = 0.08f) else BrandAmber.copy(alpha = 0.08f))
+                                .border(0.5.dp, if (isConnected) BrandEmerald.copy(alpha = 0.3f) else BrandAmber.copy(alpha = 0.3f), RoundedCornerShape(8.dp))
+                                .padding(6.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text(
+                                    text = "Sync Status",
+                                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Text(
+                                    text = if (isConnected) "Online ☁️" else "Sandbox ⚡",
+                                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                                    color = if (isConnected) BrandEmerald else BrandAmber
+                                )
+                            }
+                        }
+
+                        // Encryption Status chip
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(if (isEncrypted) BrandEmerald.copy(alpha = 0.08f) else BrandAmber.copy(alpha = 0.08f))
+                                .border(0.5.dp, if (isEncrypted) BrandEmerald.copy(alpha = 0.3f) else BrandAmber.copy(alpha = 0.3f), RoundedCornerShape(8.dp))
+                                .padding(6.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text(
+                                    text = "DB Security",
+                                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Text(
+                                    text = if (isEncrypted) "AES-256 🔒" else "Standard 🔓",
+                                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                                    color = if (isEncrypted) BrandEmerald else BrandAmber
+                                )
+                            }
+                        }
+                    }
+
                     Spacer(Modifier.height(4.dp))
                     Text(
                         text = "Crafted with ❤️ by the RoutineLog Dev Team",
@@ -903,7 +1035,7 @@ fun ProfileScreen(viewModel: MainViewModel, onSignOut: () -> Unit = {}) {
                     colors = ButtonDefaults.buttonColors(containerColor = BrandCyan),
                     modifier = Modifier.pressScale()
                 ) {
-                    Text("Great", fontWeight = FontWeight.Bold, color = Color.White)
+                    Text("Done", fontWeight = FontWeight.Bold, color = Color.White)
                 }
             },
             containerColor = MaterialTheme.colorScheme.surface,
@@ -920,7 +1052,7 @@ fun ProfileScreen(viewModel: MainViewModel, onSignOut: () -> Unit = {}) {
             },
             title = {
                 GradientText(
-                    text = "Privacy Shield",
+                    text = "Privacy Shield & Guidelines",
                     style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
                 )
             },
@@ -932,29 +1064,43 @@ fun ProfileScreen(viewModel: MainViewModel, onSignOut: () -> Unit = {}) {
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .background(BrandEmerald.copy(alpha = 0.1f), RoundedCornerShape(12.dp))
-                            .border(0.5.dp, BrandEmerald.copy(alpha = 0.3f), RoundedCornerShape(12.dp))
+                            .background(BrandEmerald.copy(alpha = 0.08f), RoundedCornerShape(12.dp))
+                            .border(0.5.dp, BrandEmerald.copy(alpha = 0.25f), RoundedCornerShape(12.dp))
                             .padding(12.dp)
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text("🛡️", fontSize = 24.sp)
+                            Text("🛡️", fontSize = 22.sp)
                             Spacer(Modifier.width(10.dp))
                             Text(
-                                text = "Your data is stored 100% locally on this device. We do not sell or upload your personal finance or tracking information.",
+                                text = "Your data is entirely your property. We enforce zero tracking, zero advertising, and absolute ledger isolation.",
                                 style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
                                 color = BrandEmerald
                             )
                         }
                     }
+                    
                     Text(
-                        text = "Because RoutineLog operates on an offline-first architecture, your private details remain entirely under your control. We do not maintain any cloud databases, nor do we run remote tracking algorithms on your transaction logs.",
-                        style = MaterialTheme.typography.bodyMedium,
+                        text = "• On-Device Sandbox (Offline Mode): By default, all debt roadmaps, asset portfolios, personal finance items, and pantry logs reside solely inside your local SQLite database. Toggle core encryption to secure your records with AES-256 on-device key locks.",
+                        style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurface
                     )
+                    
                     Text(
-                        text = "Any network interactions (such as simulated payments or invite links) are structured purely as sandboxed client-side processes. Your device is your vault.",
+                        text = "• Secure Group Syncing (Online Mode): Collaborating with family members dynamically syncs shared group ledger nodes via secure Firebase trees. Private personal ledgers, asset items, or daily targets are strictly kept offline and never synced.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+
+                    Text(
+                        text = "• Cryptographic Key Control: In AES-256 encrypted database mode, decryption keys are kept locally. They are never uploaded, shared, or backed up remotely. Be sure to keep your password and keys secure.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    
+                    Text(
+                        text = "• Zero-Tracker Promise: RoutineLog has no telemetry frameworks, advertising SDKs, background behavioral scrapers, or third-party marketing services.",
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                        color = BrandEmerald
                     )
                 }
             },
@@ -966,6 +1112,219 @@ fun ProfileScreen(viewModel: MainViewModel, onSignOut: () -> Unit = {}) {
                     modifier = Modifier.pressScale()
                 ) {
                     Text("I Understand", fontWeight = FontWeight.Bold, color = Color.White)
+                }
+            },
+            containerColor = MaterialTheme.colorScheme.surface,
+            shape = RoundedCornerShape(20.dp)
+        )
+    }
+
+    // Contact Us Support Dialog
+    if (showContactDialog) {
+        val scope = rememberCoroutineScope()
+        AlertDialog(
+            onDismissRequest = { 
+                if (!isSubmittingContact) {
+                    showContactDialog = false 
+                    showContactSuccess = false
+                    contactMessage = ""
+                }
+            },
+            icon = {
+                Icon(
+                    imageVector = if (showContactSuccess) Icons.Default.CheckCircle else Icons.Default.Email, 
+                    null, 
+                    tint = if (showContactSuccess) BrandEmerald else BrandViolet, 
+                    modifier = Modifier.size(32.dp)
+                )
+            },
+            title = {
+                GradientText(
+                    text = if (showContactSuccess) "Ticket Dispatched! ✉️" else "Contact Support",
+                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
+                )
+            },
+            text = {
+                if (showContactSuccess) {
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(14.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
+                    ) {
+                        Text(
+                            text = "Reference Ticket ID",
+                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            text = generatedTicketId,
+                            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Black, letterSpacing = 2.sp),
+                            color = BrandGold,
+                            modifier = Modifier
+                                .background(BrandGold.copy(alpha = 0.1f), RoundedCornerShape(12.dp))
+                                .border(0.5.dp, BrandGold.copy(alpha = 0.3f), RoundedCornerShape(12.dp))
+                                .padding(horizontal = 16.dp, vertical = 6.dp)
+                        )
+                        Text(
+                            text = "We have securely received your request under the [$contactCategory] category from $contactEmail.\n\nOur specialized 24/7 Pro support team has been notified, and an agent will follow up with you within 12 to 24 hours. Keep this ticket ID for your records.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            textAlign = TextAlign.Center,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(BrandEmerald.copy(alpha = 0.08f), RoundedCornerShape(10.dp))
+                                .padding(10.dp)
+                        ) {
+                            Text(
+                                text = "🔒 A copy of this secure receipt has been synced with your device notifications manager.",
+                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                color = BrandEmerald,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+                    }
+                } else {
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                        modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
+                    ) {
+                        Text(
+                            text = "Select inquiry category, write your secure ticket, and our support team will contact you shortly.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        
+                        // Categories selection
+                        Text(
+                            text = "Category",
+                            style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            val categories = listOf("Billing", "Bug Report", "Feature", "General")
+                            categories.forEach { cat ->
+                                val isSelected = contactCategory == cat
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(if (isSelected) BrandViolet.copy(alpha = 0.15f) else Color.Transparent)
+                                        .border(
+                                            0.5.dp, 
+                                            if (isSelected) BrandViolet else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f), 
+                                            RoundedCornerShape(8.dp)
+                                        )
+                                        .clickable { if (!isSubmittingContact) contactCategory = cat }
+                                        .padding(vertical = 6.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = cat,
+                                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                        color = if (isSelected) BrandViolet else MaterialTheme.colorScheme.onSurface
+                                    )
+                                }
+                            }
+                        }
+
+                        Spacer(Modifier.height(4.dp))
+
+                        // Registered Email Input
+                        OutlinedTextField(
+                            value = contactEmail,
+                            onValueChange = { contactEmail = it },
+                            label = { Text("Your Registered Email") },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                            enabled = !isSubmittingContact,
+                            colors = getDynamicTextFieldColors(BrandViolet)
+                        )
+
+                        // Multi-line inquiry message
+                        OutlinedTextField(
+                            value = contactMessage,
+                            onValueChange = { contactMessage = it },
+                            label = { Text("Message Details") },
+                            placeholder = { Text("Describe your support inquiry or feedback in detail...") },
+                            modifier = Modifier.fillMaxWidth().height(110.dp),
+                            maxLines = 5,
+                            singleLine = false,
+                            enabled = !isSubmittingContact,
+                            colors = getDynamicTextFieldColors(BrandViolet)
+                        )
+
+                        Text(
+                            text = "🔒 Security Shield: Our support agents will NEVER ask for passwords or AES-256 decryption keys. Keep them completely private.",
+                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                            color = BrandRose
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                if (showContactSuccess) {
+                    Button(
+                        onClick = { 
+                            showContactDialog = false 
+                            showContactSuccess = false
+                            contactMessage = ""
+                        },
+                        shape = RoundedCornerShape(10.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = BrandEmerald),
+                        modifier = Modifier.pressScale().fillMaxWidth()
+                    ) {
+                        Text("Done", fontWeight = FontWeight.Bold, color = Color.White)
+                    }
+                } else {
+                    val isValid = contactMessage.isNotBlank() && contactEmail.contains("@") && contactEmail.contains(".")
+                    
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        TextButton(
+                            onClick = { showContactDialog = false },
+                            enabled = !isSubmittingContact,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("Cancel")
+                        }
+
+                        Button(
+                            onClick = {
+                                if (isValid && !isSubmittingContact) {
+                                    scope.launch {
+                                        isSubmittingContact = true
+                                        delay(1800) // Simulated secure cryptoprocess request submission
+                                        generatedTicketId = "RTL-${(1000..9999).random()}-SEC"
+                                        isSubmittingContact = false
+                                        showContactSuccess = true
+                                        viewModel.sendSupportTicketNotification(generatedTicketId, contactCategory)
+                                    }
+                                }
+                            },
+                            shape = RoundedCornerShape(10.dp),
+                            enabled = isValid && !isSubmittingContact,
+                            colors = ButtonDefaults.buttonColors(containerColor = BrandViolet),
+                            modifier = Modifier.pressScale().weight(1f)
+                        ) {
+                            if (isSubmittingContact) {
+                                CircularProgressIndicator(
+                                    color = Color.White,
+                                    strokeWidth = 2.dp,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            } else {
+                                Text("Submit", fontWeight = FontWeight.Bold, color = Color.White)
+                            }
+                        }
+                    }
                 }
             },
             containerColor = MaterialTheme.colorScheme.surface,

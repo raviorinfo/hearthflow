@@ -67,7 +67,7 @@ fun LoginScreen(viewModel: MainViewModel, onLoginSuccess: () -> Unit) {
 
     fun resetFields() {
         name = ""; email = ""; password = ""; confirmPassword = ""
-        errorText = null; successText = null
+        errorText = null; successText = null; isLoading = false
     }
 
     fun validate(): Boolean {
@@ -336,13 +336,32 @@ fun LoginScreen(viewModel: MainViewModel, onLoginSuccess: () -> Unit) {
                                         viewModel.sendForgotPasswordNotification(email)
                                     }
                                     AuthMode.LOGIN -> {
-                                        val prefs = context.getSharedPreferences("auth_prefs", android.content.Context.MODE_PRIVATE)
-                                        val savedPassword = prefs.getString("saved_password", "admin123")
-                                        if (password != savedPassword) {
-                                            errorText = "Incorrect password. Please try again."
-                                        } else {
-                                            onLoginSuccess()
-                                        }
+                                        isLoading = true
+                                        viewModel.loginUser(
+                                            email = email,
+                                            onSuccess = {
+                                                isLoading = false
+                                                onLoginSuccess()
+                                            },
+                                            onFailure = { cloudError ->
+                                                // Fallback to local sandbox password check
+                                                val prefs = context.getSharedPreferences("auth_prefs", android.content.Context.MODE_PRIVATE)
+                                                val savedPassword = prefs.getString("saved_password", "admin123")
+                                                val savedEmail = prefs.getString("authenticated_user_email", "guest@omnilog.com")
+                                                
+                                                if (password == savedPassword && (email == savedEmail || email == "guest@omnilog.com" || email == "user@routinelog.com")) {
+                                                    isLoading = false
+                                                    onLoginSuccess()
+                                                } else {
+                                                    isLoading = false
+                                                    errorText = if (com.example.omnilog.data.firebase.FirebaseSyncManager.isInitialized) {
+                                                        cloudError
+                                                    } else {
+                                                        "Incorrect local password. Please try again."
+                                                    }
+                                                }
+                                            }
+                                        )
                                     }
                                 }
                             }

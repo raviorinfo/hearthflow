@@ -62,6 +62,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _isDatabaseEncrypted = MutableStateFlow(false)
     val isDatabaseEncrypted: StateFlow<Boolean> = _isDatabaseEncrypted.asStateFlow()
 
+    private val _cloudSyncStatus = MutableStateFlow("Local Sandbox ⚡")
+    val cloudSyncStatus: StateFlow<String> = _cloudSyncStatus.asStateFlow()
+
     val isPremiumActive = userAccount.map {
         it?.isPro == true && it.proExpiryTimestamp > System.currentTimeMillis()
     }.stateIn(viewModelScope, SharingStarted.Eagerly, false)
@@ -70,6 +73,41 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val prefs = application.getSharedPreferences("auth_prefs", android.content.Context.MODE_PRIVATE)
         _isDatabaseEncrypted.value = prefs.getBoolean("database_encrypted", false)
         refreshData()
+
+        // Auto-initialize real-time cloud sync if previously logged in
+        val email = prefs.getString("authenticated_user_email", null)
+        if (email != null) {
+            startCloudSynchronizer(email)
+        }
+    }
+
+    fun startCloudSynchronizer(email: String) {
+        if (!com.example.omnilog.data.firebase.FirebaseSyncManager.isInitialized) {
+            _cloudSyncStatus.value = "Local Sandbox ⚡"
+            return
+        }
+        _cloudSyncStatus.value = "Connected ☁️"
+        
+        // Listen to splits and custom groups containing our email in real-time
+        com.example.omnilog.data.firebase.FirebaseSyncManager.observeRealtimeSplits(email) { cloudSplits ->
+            viewModelScope.launch(Dispatchers.IO) {
+                cloudSplits.forEach { cloudSplit ->
+                    // 1. Sync custom groups dynamically
+                    if (!_customGroups.value.contains(cloudSplit.groupName)) {
+                        _customGroups.value = _customGroups.value + cloudSplit.groupName
+                    }
+                    
+                    // 2. Cache split expense locally in Room database
+                    val local = logDao.getSplitExpenseSync(cloudSplit.id)
+                    if (local == null) {
+                        logDao.insertSplitExpense(cloudSplit)
+                    } else if (local.isSettled != cloudSplit.isSettled) {
+                        logDao.insertSplitExpense(cloudSplit)
+                    }
+                }
+                refreshDataInternal()
+            }
+        }
     }
 
     private suspend fun refreshDataInternal() {
@@ -124,6 +162,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun registerUser(name: String, email: String, onSuccess: () -> Unit) {
         viewModelScope.launch(Dispatchers.IO) {
+            // 1. Sync/Register in Firebase first if initialized
+            if (com.example.omnilog.data.firebase.FirebaseSyncManager.isInitialized) {
+                com.example.omnilog.data.firebase.FirebaseSyncManager.registerUserCloud(email, name) { _, _ -> }
+            }
+
             // userId must be "local_user" so it matches the DAO query getUserAccount("local_user")
             val existing = logDao.getUserAccountSync("local_user")
             val newUser = if (existing != null) {
@@ -133,13 +176,72 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
             logDao.updateUserAccount(newUser)
             refreshDataInternal()
+
+            val prefs = getApplication<Application>().getSharedPreferences("auth_prefs", android.content.Context.MODE_PRIVATE)
+            prefs.edit().putString("authenticated_user_email", email).apply()
+
             withContext(Dispatchers.Main) {
+                startCloudSynchronizer(email)
                 _uiState.value = UiState.Success("Welcome, $name!")
                 notificationManager.sendAlert(
                     "Welcome to RoutineLog! 🎉", 
-                    "Your secure offline-first account is active, $name."
+                    "Your cloud-synced account is active, $name."
                 )
                 onSuccess()
+            }
+        }
+    }
+
+    fun loginUser(email: String, onSuccess: () -> Unit, onFailure: (String) -> Unit) {
+        viewModelScope.launch(Dispatchers.IO) {
+            if (com.example.omnilog.data.firebase.FirebaseSyncManager.isInitialized) {
+                var callbackInvoked = false
+                
+                // 1. Launch a 6-second timeout job to prevent indefinite UI loading states
+                val timeoutJob = launch {
+                    delay(6000)
+                    if (!callbackInvoked) {
+                        callbackInvoked = true
+                        withContext(Dispatchers.Main) {
+                            onFailure("Firebase connection timed out. Please check your network connectivity, database URL, and security rules.")
+                        }
+                    }
+                }
+
+                com.example.omnilog.data.firebase.FirebaseSyncManager.fetchUserProfile(email) { cloudAccount ->
+                    if (!callbackInvoked) {
+                        callbackInvoked = true
+                        timeoutJob.cancel()
+                        viewModelScope.launch(Dispatchers.IO) {
+                            if (cloudAccount != null) {
+                                // Restore pro subscription status and profile details to local Room cache
+                                logDao.updateUserAccount(cloudAccount)
+                                refreshDataInternal()
+                                
+                                val prefs = getApplication<Application>().getSharedPreferences("auth_prefs", android.content.Context.MODE_PRIVATE)
+                                prefs.edit().putString("authenticated_user_email", email).apply()
+                                
+                                withContext(Dispatchers.Main) {
+                                    startCloudSynchronizer(email)
+                                    notificationManager.sendAlert(
+                                        "Welcome back! ⚡",
+                                        "Successfully synced and restored profile for ${cloudAccount.name}."
+                                    )
+                                    onSuccess()
+                                }
+                            } else {
+                                // Email is not registered on cloud yet, allow offline sandbox fallback or create account
+                                withContext(Dispatchers.Main) {
+                                    onFailure("Email not found in cloud. Please register first.")
+                                }
+                            }
+                        }
+                    }
+                }
+            } else {
+                withContext(Dispatchers.Main) {
+                    onFailure("Firebase not initialized. Login failed.")
+                }
             }
         }
     }
@@ -148,6 +250,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         notificationManager.sendAlert(
             "Password Reset Request 🔑", 
             "A secure link has been sent to $email. Use password 'admin123' to sign in locally."
+        )
+    }
+
+    fun sendSupportTicketNotification(ticketId: String, category: String) {
+        notificationManager.sendAlert(
+            "Support Ticket Created ✉️",
+            "Support request under [$category] received. Ref: $ticketId. Our support team will reach out shortly."
         )
     }
 
@@ -261,6 +370,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         if (category == LogCategory.INVENTORY || category == LogCategory.CONSUMPTION) {
             processInventoryUpdate(rawJson, category)
         }
+
+        // Consolidated refresh to update the UI StateFlow instantly
+        refreshDataInternal()
 
         _uiState.value = UiState.Success("Logged as ${category.name}")
     }
@@ -688,9 +800,30 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun deleteLog(id: Long) {
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) {
+                logDao.deleteLog(id)
+            }
+            refreshDataInternal()
+            _uiState.value = UiState.Success("Log entry deleted successfully!")
+        }
+    }
+
+    fun deleteLogGroup(groupId: String) {
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) {
+                logDao.deleteLogGroupByGroupId(groupId)
+            }
+            refreshDataInternal()
+            _uiState.value = UiState.Success("Scanned bill receipt group deleted successfully!")
+        }
+    }
+
     fun purchasePremiumPlan(planName: String, durationDays: Long) {
         viewModelScope.launch {
             try {
+                var syncAccount: UserAccount? = null
                 withContext(Dispatchers.IO) {
                     val currentAccount = logDao.getUserAccountSync("local_user") ?: UserAccount("local_user", "Guest", "guest@omnilog.com")
                     val currentExpiry = if (currentAccount.proExpiryTimestamp > System.currentTimeMillis()) currentAccount.proExpiryTimestamp else System.currentTimeMillis()
@@ -699,8 +832,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     currentAccount.subscriptionPlan = planName
                     currentAccount.proExpiryTimestamp = currentExpiry + addedMs
                     logDao.updateUserAccount(currentAccount)
+                    syncAccount = currentAccount
                 }
                 refreshDataInternal()
+                
+                // Sync purchases to Firebase database
+                syncAccount?.let {
+                    com.example.omnilog.data.firebase.FirebaseSyncManager.syncUserProfile(it)
+                }
+
                 _uiState.value = UiState.Success("Successfully subscribed to $planName!")
                 notificationManager.sendAlert(
                     "Welcome to RoutineLog Pro! 👑", 
@@ -759,6 +899,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         if (name.isNotBlank() && !_customGroups.value.contains(name)) {
             _customGroups.value = _customGroups.value + name
             _groupInvitedMembers.value = _groupInvitedMembers.value + (name to invites)
+            
+            // Push group creation and user mappings to Firebase Realtime Database
+            val myEmail = userAccount.value?.email ?: "guest@omnilog.com"
+            com.example.omnilog.data.firebase.FirebaseSyncManager.createGroupOnCloud(name, myEmail, invites)
+
             _uiState.value = UiState.Success("Group '$name' created successfully!")
             
             if (invites.isNotEmpty()) {
@@ -767,6 +912,116 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     "Group Invitations Sent! 👥", 
                     "Universal invitations dispatched to: $targets for group '$name'."
                 )
+            }
+        }
+    }
+
+    fun updateSplitGroup(oldName: String, newName: String) {
+        if (oldName == newName || newName.isBlank()) return
+        
+        viewModelScope.launch(Dispatchers.IO) {
+            // 1. Update the list in customGroups
+            if (_customGroups.value.contains(oldName)) {
+                _customGroups.value = _customGroups.value.map { if (it == oldName) newName else it }
+            }
+            
+            // 2. Update groupInvitedMembers mapping
+            val invites = _groupInvitedMembers.value[oldName] ?: emptyList()
+            val newInvitedMembers = _groupInvitedMembers.value.toMutableMap()
+            newInvitedMembers.remove(oldName)
+            newInvitedMembers[newName] = invites
+            _groupInvitedMembers.value = newInvitedMembers
+            
+            // 3. Update all split expenses in the SQLite database that belong to this group
+            val currentSplits = logDao.getAllSplitExpensesSync()
+            currentSplits.forEach { split ->
+                if (split.groupName == oldName) {
+                    val updatedSplit = split.copy(groupName = newName)
+                    logDao.insertSplitExpense(updatedSplit)
+                }
+            }
+            refreshDataInternal()
+            
+            // 4. Sync name change to the cloud
+            val members = invites + (userAccount.value?.email ?: "guest@omnilog.com")
+            com.example.omnilog.data.firebase.FirebaseSyncManager.updateGroupNameOnCloud(oldName, newName, members)
+            
+            withContext(Dispatchers.Main) {
+                _uiState.value = UiState.Success("Group name updated to '$newName'!")
+            }
+        }
+    }
+
+    fun addMemberToGroup(groupName: String, memberEmail: String) {
+        if (memberEmail.isBlank()) return
+        
+        viewModelScope.launch(Dispatchers.IO) {
+            val invites = _groupInvitedMembers.value[groupName] ?: emptyList()
+            if (!invites.contains(memberEmail)) {
+                val newInvites = invites + memberEmail
+                val updatedInvitesMap = _groupInvitedMembers.value.toMutableMap()
+                updatedInvitesMap[groupName] = newInvites
+                _groupInvitedMembers.value = updatedInvitesMap
+                
+                // Sync to cloud
+                com.example.omnilog.data.firebase.FirebaseSyncManager.addMemberToGroupOnCloud(groupName, memberEmail)
+                
+                withContext(Dispatchers.Main) {
+                    notificationManager.sendAlert(
+                        "Member Added! 👥", 
+                        "Successfully invited $memberEmail to group '$groupName'."
+                    )
+                    _uiState.value = UiState.Success("Added $memberEmail to group!")
+                }
+            }
+        }
+    }
+
+    fun removeMemberFromGroup(groupName: String, memberEmail: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val invites = _groupInvitedMembers.value[groupName] ?: emptyList()
+            if (invites.contains(memberEmail)) {
+                val newInvites = invites.filter { it != memberEmail }
+                val updatedInvitesMap = _groupInvitedMembers.value.toMutableMap()
+                updatedInvitesMap[groupName] = newInvites
+                _groupInvitedMembers.value = updatedInvitesMap
+                
+                // Sync to cloud
+                com.example.omnilog.data.firebase.FirebaseSyncManager.removeMemberFromGroupOnCloud(groupName, memberEmail)
+                
+                withContext(Dispatchers.Main) {
+                    _uiState.value = UiState.Success("Removed $memberEmail from group.")
+                }
+            }
+        }
+    }
+
+    fun deleteSplitGroup(groupName: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            // 1. Remove from local list
+            _customGroups.value = _customGroups.value.filter { it != groupName }
+            
+            // 2. Remove invites
+            val invites = _groupInvitedMembers.value[groupName] ?: emptyList()
+            val updatedInvitesMap = _groupInvitedMembers.value.toMutableMap()
+            updatedInvitesMap.remove(groupName)
+            _groupInvitedMembers.value = updatedInvitesMap
+            
+            // 3. Delete splits belonging to this group locally
+            val currentSplits = logDao.getAllSplitExpensesSync()
+            currentSplits.forEach { split ->
+                if (split.groupName == groupName) {
+                    logDao.deleteSplitExpense(split.id)
+                }
+            }
+            refreshDataInternal()
+            
+            // 4. Sync delete to cloud
+            val members = invites + (userAccount.value?.email ?: "guest@omnilog.com")
+            com.example.omnilog.data.firebase.FirebaseSyncManager.deleteGroupFromCloud(groupName, members)
+            
+            withContext(Dispatchers.Main) {
+                _uiState.value = UiState.Success("Group '$groupName' deleted successfully.")
             }
         }
     }
@@ -784,9 +1039,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 groupName = groupName
             )
             withContext(Dispatchers.IO) {
-                logDao.insertSplitExpense(expense)
+                val insertedId = logDao.insertSplitExpense(expense)
+                expense.id = insertedId
             }
             refreshDataInternal()
+
+            // Push split log to Firebase Realtime Database
+            com.example.omnilog.data.firebase.FirebaseSyncManager.pushSplitExpense(expense)
+
             notificationManager.sendAlert("New Split Bill", "Split with $splitWith logged successfully.")
             _uiState.value = UiState.Success("Split bill logged.")
         }
@@ -796,9 +1056,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             _uiState.value = UiState.Loading
             try {
+                var groupName = "General"
                 withContext(Dispatchers.IO) {
                     val expense = logDao.getSplitExpenseSync(id)
                     if (expense != null) {
+                        groupName = expense.groupName
                         val updated = expense.copy(isSettled = true)
                         logDao.insertSplitExpense(updated)
 
@@ -816,6 +1078,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     }
                 }
                 refreshDataInternal()
+
+                // Mark settled on the cloud
+                com.example.omnilog.data.firebase.FirebaseSyncManager.settleSplitExpenseOnCloud(id, groupName)
+
                 notificationManager.sendAlert("Bill Settled", "Split bill has been marked as settled.")
                 _uiState.value = UiState.Success("Bill settled successfully.")
             } catch (e: Exception) {
@@ -826,10 +1092,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun deleteSplitExpense(id: Long) {
         viewModelScope.launch {
+            var groupName = "General"
             withContext(Dispatchers.IO) {
+                val expense = logDao.getSplitExpenseSync(id)
+                if (expense != null) {
+                    groupName = expense.groupName
+                }
                 logDao.deleteSplitExpense(id)
             }
             refreshDataInternal()
+
+            // Remove split from cloud
+            com.example.omnilog.data.firebase.FirebaseSyncManager.deleteSplitExpenseOnCloud(id, groupName)
+
             _uiState.value = UiState.Success("Split expense deleted.")
         }
     }

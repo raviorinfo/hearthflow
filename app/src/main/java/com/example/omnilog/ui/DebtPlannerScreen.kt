@@ -4,9 +4,11 @@ import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -49,6 +51,141 @@ fun DebtPlannerScreen(viewModel: MainViewModel) {
         AnimatedBackground()
 
         Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+            // ─── Consolidated Net Wealth summary ───
+            val totalLiabilities = remember(debts) { debts.sumOf { it.balance } }
+            val totalAssets = remember(investments) { investments.sumOf { it.balance } }
+            val netWealth = totalAssets - totalLiabilities
+            val isDark = isSystemInDarkTheme()
+
+            val netWorthGradient = when {
+                netWealth > 0 -> Brush.horizontalGradient(listOf(Color(0xFF0F172A), Color(0xFF064E3B))) // Deep slate to deep forest green
+                netWealth < 0 -> Brush.horizontalGradient(listOf(Color(0xFF0F172A), Color(0xFF451A03))) // Deep slate to deep amber/rust red
+                else -> Brush.horizontalGradient(listOf(Color(0xFF0F172A), Color(0xFF1E1E2D))) // Deep slate to grey
+            }
+
+            val netWorthBgModifier = if (isDark) {
+                Modifier.background(netWorthGradient)
+            } else {
+                Modifier.background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+            }
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(20.dp))
+                    .then(netWorthBgModifier)
+                    .border(
+                        1.dp,
+                        if (netWealth > 0) BrandEmerald.copy(alpha = 0.4f) else if (netWealth < 0) BrandRose.copy(alpha = 0.4f) else MaterialTheme.colorScheme.outline.copy(alpha = 0.2f),
+                        RoundedCornerShape(20.dp)
+                    )
+                    .padding(18.dp)
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text(
+                                text = "Consolidated Net Wealth",
+                                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Spacer(Modifier.height(2.dp))
+                            Text(
+                                text = formatCurrency(netWealth),
+                                style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Black),
+                                color = if (netWealth > 0) BrandEmerald else if (netWealth < 0) BrandRose else MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+
+                        // Badge
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(if (netWealth > 0) BrandEmerald.copy(alpha = 0.15f) else if (netWealth < 0) BrandRose.copy(alpha = 0.15f) else Color.Gray.copy(alpha = 0.15f))
+                                .border(1.dp, if (netWealth > 0) BrandEmerald.copy(alpha = 0.4f) else if (netWealth < 0) BrandRose.copy(alpha = 0.4f) else Color.Gray.copy(alpha = 0.4f), RoundedCornerShape(8.dp))
+                                .padding(horizontal = 10.dp, vertical = 4.dp)
+                        ) {
+                            Text(
+                                text = if (netWealth > 0) "Wealth Surplus 📈" else if (netWealth < 0) "Net Liability 📉" else "Balanced ⚖️",
+                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                color = if (netWealth > 0) BrandEmerald else if (netWealth < 0) BrandRose else MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+                    }
+
+                    HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
+
+                    // Assets / Liabilities breakdown summary row
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(modifier = Modifier.size(6.dp).clip(CircleShape).background(BrandCyan))
+                            Spacer(Modifier.width(6.dp))
+                            Text(
+                                text = "Assets: ${formatCurrency(totalAssets)}",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(modifier = Modifier.size(6.dp).clip(CircleShape).background(BrandRose))
+                            Spacer(Modifier.width(6.dp))
+                            Text(
+                                text = "Liabilities: ${formatCurrency(totalLiabilities)}",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+
+                    // Asset-to-Liability dynamic progress bar slider
+                    val totalSum = totalAssets + totalLiabilities
+                    val assetRatio = if (totalSum > 0) (totalAssets / totalSum).toFloat() else 0.5f
+
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(8.dp)
+                            .clip(CircleShape)
+                            .background(BrandRose.copy(alpha = 0.3f))
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxHeight()
+                                .fillMaxWidth(assetRatio)
+                                .clip(CircleShape)
+                                .background(BrandCyan)
+                        )
+                    }
+                    
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            text = "${(assetRatio * 100).toInt()}% Assets",
+                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp, fontWeight = FontWeight.Bold),
+                            color = BrandCyan
+                        )
+                        Text(
+                            text = "${((1f - assetRatio) * 100).toInt()}% Liabilities",
+                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp, fontWeight = FontWeight.Bold),
+                            color = BrandRose
+                        )
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(16.dp))
+
             // Sliding Tab Selector Card
             GlassCard(modifier = Modifier.fillMaxWidth()) {
                 Row(
@@ -345,6 +482,7 @@ fun DebtItemCard(
     onDelete: () -> Unit,
     onToggleEmiPaid: (Boolean) -> Unit
 ) {
+    val isDark = isSystemInDarkTheme()
     val (aprBadgeColor, aprBadgeLabel, aprBadgeBg) = when {
         debt.interestRate >= 15.0 -> Triple(BrandRose, "CRITICAL APR", BrandRose.copy(alpha = 0.15f))
         debt.interestRate >= 8.0 -> Triple(BrandAmber, "MODERATE APR", BrandAmber.copy(alpha = 0.15f))
@@ -354,17 +492,21 @@ fun DebtItemCard(
     val borderBrush = Brush.linearGradient(
         colors = listOf(
             aprBadgeColor.copy(alpha = 0.5f),
-            Color(0x10FFFFFF),
+            if (isDark) Color(0x10FFFFFF) else MaterialTheme.colorScheme.outline.copy(alpha = 0.2f),
             BrandGradientEnd.copy(alpha = 0.3f)
         )
     )
+
+    val bg = if (isDark) Color(0x15FFFFFF) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
+    val textColor = MaterialTheme.colorScheme.onSurface
+    val subTextColor = MaterialTheme.colorScheme.onSurfaceVariant
 
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .graphicsLayer(alpha = if (debt.isEmiPaid) 0.65f else 1.0f)
             .clip(RoundedCornerShape(20.dp))
-            .background(Color(0x15FFFFFF))
+            .background(bg)
             .border(1.dp, borderBrush, RoundedCornerShape(20.dp))
             .clickable { onEdit() }
             .padding(18.dp)
@@ -382,7 +524,7 @@ fun DebtItemCard(
                     Text(
                         text = debt.name, 
                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                        color = Color.White
+                        color = textColor
                     )
                     
                     Box(
@@ -407,16 +549,16 @@ fun DebtItemCard(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Column {
-                        Text("Current Balance", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("Current Balance", style = MaterialTheme.typography.labelSmall, color = subTextColor)
                         Text(
                             text = formatCurrency(debt.balance),
                             style = MaterialTheme.typography.titleMedium,
-                            color = Color.White,
+                            color = textColor,
                             fontWeight = FontWeight.Bold
                         )
                     }
                     Column {
-                        Text("Interest Rate", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("Interest Rate", style = MaterialTheme.typography.labelSmall, color = subTextColor)
                         Text(
                             text = "${debt.interestRate}% APR",
                             style = MaterialTheme.typography.titleMedium,
@@ -440,10 +582,10 @@ fun DebtItemCard(
                         fontWeight = FontWeight.SemiBold
                     )
                     
-                    val buttonBg = if (debt.isEmiPaid) BrandEmerald.copy(alpha = 0.2f) else Color.White.copy(alpha = 0.05f)
-                    val buttonBorder = if (debt.isEmiPaid) BrandEmerald.copy(alpha = 0.5f) else Color.White.copy(alpha = 0.15f)
+                    val buttonBg = if (debt.isEmiPaid) BrandEmerald.copy(alpha = 0.2f) else (if (isDark) Color.White.copy(alpha = 0.05f) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f))
+                    val buttonBorder = if (debt.isEmiPaid) BrandEmerald.copy(alpha = 0.5f) else (if (isDark) Color.White.copy(alpha = 0.15f) else MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))
                     val buttonText = if (debt.isEmiPaid) "EMI Paid ✓" else "Mark EMI Paid"
-                    val buttonTextColor = if (debt.isEmiPaid) BrandEmerald else Color.White.copy(alpha = 0.8f)
+                    val buttonTextColor = if (debt.isEmiPaid) BrandEmerald else (if (isDark) Color.White.copy(alpha = 0.8f) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f))
                     
                     Box(
                         modifier = Modifier
@@ -495,6 +637,7 @@ fun InvestmentItemCard(
     onEdit: () -> Unit,
     onDelete: () -> Unit
 ) {
+    val isDark = isSystemInDarkTheme()
     val rateBadgeColor = when {
         investment.expectedReturnRate >= 15.0 -> BrandEmerald
         investment.expectedReturnRate >= 8.0 -> BrandCyan
@@ -506,16 +649,20 @@ fun InvestmentItemCard(
     val borderBrush = Brush.linearGradient(
         colors = listOf(
             rateBadgeColor.copy(alpha = 0.5f),
-            Color(0x10FFFFFF),
+            if (isDark) Color(0x10FFFFFF) else MaterialTheme.colorScheme.outline.copy(alpha = 0.2f),
             BrandGradientEnd.copy(alpha = 0.3f)
         )
     )
+
+    val bg = if (isDark) Color(0x15FFFFFF) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
+    val textColor = MaterialTheme.colorScheme.onSurface
+    val subTextColor = MaterialTheme.colorScheme.onSurfaceVariant
 
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(20.dp))
-            .background(Color(0x15FFFFFF))
+            .background(bg)
             .border(1.dp, borderBrush, RoundedCornerShape(20.dp))
             .clickable { onEdit() }
             .padding(18.dp)
@@ -533,7 +680,7 @@ fun InvestmentItemCard(
                     Text(
                         text = investment.name, 
                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                        color = Color.White
+                        color = textColor
                     )
                     
                     Box(
@@ -558,16 +705,16 @@ fun InvestmentItemCard(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Column {
-                        Text("Current Balance", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("Current Balance", style = MaterialTheme.typography.labelSmall, color = subTextColor)
                         Text(
                             text = formatCurrency(investment.balance),
                             style = MaterialTheme.typography.titleMedium,
-                            color = Color.White,
+                            color = textColor,
                             fontWeight = FontWeight.Bold
                         )
                     }
                     Column {
-                        Text("Monthly Contribution", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("Monthly Contribution", style = MaterialTheme.typography.labelSmall, color = subTextColor)
                         Text(
                             text = formatCurrency(investment.monthlyContribution),
                             style = MaterialTheme.typography.titleMedium,
@@ -672,8 +819,8 @@ fun AddDebtDialog(onDismiss: () -> Unit, onSave: (String, Double, Double, Double
                 Text("Cancel", color = MaterialTheme.colorScheme.onSurfaceVariant) 
             }
         },
-        containerColor = Color(0xFF131929),
-        modifier = Modifier.border(1.dp, Color(0x33FFFFFF), RoundedCornerShape(28.dp))
+        containerColor = MaterialTheme.colorScheme.surface,
+        modifier = Modifier.border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.2f), RoundedCornerShape(28.dp))
     )
 }
 
@@ -750,8 +897,8 @@ fun EditDebtDialog(
                 Text("Cancel", color = MaterialTheme.colorScheme.onSurfaceVariant) 
             }
         },
-        containerColor = Color(0xFF131929),
-        modifier = Modifier.border(1.dp, Color(0x33FFFFFF), RoundedCornerShape(28.dp))
+        containerColor = MaterialTheme.colorScheme.surface,
+        modifier = Modifier.border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.2f), RoundedCornerShape(28.dp))
     )
 }
 
@@ -824,8 +971,8 @@ fun AddInvestmentDialog(onDismiss: () -> Unit, onSave: (String, Double, Double, 
                 Text("Cancel", color = MaterialTheme.colorScheme.onSurfaceVariant) 
             }
         },
-        containerColor = Color(0xFF131929),
-        modifier = Modifier.border(1.dp, Color(0x33FFFFFF), RoundedCornerShape(28.dp))
+        containerColor = MaterialTheme.colorScheme.surface,
+        modifier = Modifier.border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.2f), RoundedCornerShape(28.dp))
     )
 }
 
@@ -902,8 +1049,8 @@ fun EditInvestmentDialog(
                 Text("Cancel", color = MaterialTheme.colorScheme.onSurfaceVariant) 
             }
         },
-        containerColor = Color(0xFF131929),
-        modifier = Modifier.border(1.dp, Color(0x33FFFFFF), RoundedCornerShape(28.dp))
+        containerColor = MaterialTheme.colorScheme.surface,
+        modifier = Modifier.border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.2f), RoundedCornerShape(28.dp))
     )
 }
 
@@ -929,11 +1076,12 @@ fun DialogTextField(
         )
     )
 
+    val isDark = isSystemInDarkTheme()
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
-            .background(Color(0x0AFFFFFF))
+            .background(if (isDark) Color(0x0AFFFFFF) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f))
             .border(1.dp, borderBrush, RoundedCornerShape(12.dp))
     ) {
         TextField(
@@ -945,8 +1093,8 @@ fun DialogTextField(
                 .fillMaxWidth()
                 .onFocusChanged { isFocused = it.isFocused },
             colors = TextFieldDefaults.colors(
-                focusedTextColor = Color.White,
-                unfocusedTextColor = Color.White,
+                focusedTextColor = MaterialTheme.colorScheme.onSurface,
+                unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
                 focusedContainerColor = Color.Transparent,
                 unfocusedContainerColor = Color.Transparent,
                 disabledContainerColor = Color.Transparent,

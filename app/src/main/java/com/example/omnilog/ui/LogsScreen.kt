@@ -285,8 +285,14 @@ fun LogsScreen(viewModel: MainViewModel) {
                 } else {
                     items(displayItems) { displayItem ->
                         when (displayItem) {
-                            is LogDisplayItem.Single -> LogItem(displayItem.log)
-                            is LogDisplayItem.BillGroup -> BillGroupCard(displayItem)
+                            is LogDisplayItem.Single -> LogItem(
+                                log = displayItem.log,
+                                onDeleteClick = { viewModel.deleteLog(displayItem.log.id) }
+                            )
+                            is LogDisplayItem.BillGroup -> BillGroupCard(
+                                group = displayItem,
+                                onDeleteGroup = { viewModel.deleteLogGroup(displayItem.groupId) }
+                            )
                         }
                     }
                 }
@@ -329,7 +335,10 @@ fun LogsScreen(viewModel: MainViewModel) {
 }
 
 @Composable
-fun BillGroupCard(group: LogDisplayItem.BillGroup) {
+fun BillGroupCard(
+    group: LogDisplayItem.BillGroup,
+    onDeleteGroup: () -> Unit
+) {
     var expanded by remember { mutableStateOf(false) }
 
     val totalAmount = remember(group.childLogs) {
@@ -434,6 +443,17 @@ fun BillGroupCard(group: LogDisplayItem.BillGroup) {
                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                         color = BrandViolet
                     )
+                    IconButton(
+                        onClick = onDeleteGroup,
+                        modifier = Modifier.size(28.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Delete,
+                            contentDescription = "Delete Grouped Bill",
+                            tint = Color(0xFFEF4444).copy(alpha = 0.85f),
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
                     IconButton(
                         onClick = { expanded = !expanded },
                         modifier = Modifier.size(24.dp)
