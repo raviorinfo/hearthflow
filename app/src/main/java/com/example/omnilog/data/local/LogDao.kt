@@ -36,6 +36,24 @@ interface LogDao {
     @Query("DELETE FROM log_entries")
     fun deleteAllSync()
 
+    @Query("DELETE FROM inventory")
+    fun deleteAllInventory()
+
+    @Query("DELETE FROM debts")
+    fun deleteAllDebts()
+
+    @Query("DELETE FROM investments")
+    fun deleteAllInvestments()
+
+    @Query("DELETE FROM split_expenses")
+    fun deleteAllSplitExpenses()
+
+    @Query("DELETE FROM financial_profile")
+    fun deleteAllFinancialProfiles()
+
+    @Query("DELETE FROM user_account")
+    fun deleteAllUserAccounts()
+
     // Financial Planner Methods
     @Query("SELECT * FROM debts WHERE userId = :userId")
     fun getDebtsSync(userId: String): List<DebtEntry>

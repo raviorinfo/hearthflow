@@ -271,6 +271,7 @@ fun NavGraph(navController: NavHostController, viewModel: MainViewModel) {
             ProfileScreen(
                 viewModel = viewModel,
                 onSignOut = {
+                    viewModel.signOut()
                     navController.navigate(Screen.Login.route) {
                         popUpTo(0) { inclusive = true }
                         launchSingleTop = true

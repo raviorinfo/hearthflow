@@ -124,14 +124,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                activeNetwork.hasTransport(android.net.NetworkCapabilities.TRANSPORT_ETHERNET)
     }
 
+    // Admin status is determined SOLELY by email, never by display name, to prevent privilege escalation.
+    private fun isAdminEmail(email: String): Boolean {
+        val trimmedEmail = email.lowercase().trim()
+        return trimmedEmail == "admin@omnilog.com" || trimmedEmail.startsWith("admin@") || trimmedEmail == "admin"
+    }
+
     fun startCloudSynchronizer(email: String) {
         val trimmedEmail = email.lowercase().trim()
-        val nameCheck = _userAccount.value?.name?.lowercase()?.trim() ?: ""
-        val isUserAdmin = trimmedEmail == "admin@omnilog.com" || 
-                          trimmedEmail.startsWith("admin@") || 
-                          trimmedEmail == "admin" || 
-                          nameCheck == "admin" || 
-                          nameCheck.contains("admin")
+        val isUserAdmin = isAdminEmail(trimmedEmail)
         _isAdminUser.value = isUserAdmin
 
         val isRealFirebase = com.example.omnilog.data.firebase.FirebaseSyncManager.isInitialized && 
@@ -215,13 +216,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             _userAccount.value = currentAccount
 
             currentAccount?.let { acc ->
-                val emailCheck = acc.email.lowercase().trim()
-                val nameCheck = acc.name.lowercase().trim()
-                val isUserAdmin = emailCheck == "admin@omnilog.com" || 
-                                  emailCheck.startsWith("admin@") || 
-                                  emailCheck == "admin" || 
-                                  nameCheck == "admin" || 
-                                  nameCheck.contains("admin")
+                // Admin status is determined by email only, NOT by display name.
+                // This prevents privilege escalation via name change.
+                val isUserAdmin = isAdminEmail(acc.email)
                 
                 withContext(Dispatchers.Main) {
                     val wasAdminBefore = _isAdminUser.value
@@ -383,12 +380,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun checkIfAdminRegistered(name: String, email: String, onResult: (Boolean) -> Unit) {
         val emailCheck = email.lowercase().trim()
-        val nameCheck = name.lowercase().trim()
-        val isNewAdmin = emailCheck == "admin@omnilog.com" || 
-                         emailCheck.startsWith("admin@") || 
-                         emailCheck == "admin" || 
-                         nameCheck == "admin" || 
-                         nameCheck.contains("admin")
+        // Admin is determined solely by email. Name-based checks are removed to prevent escalation.
+        val isNewAdmin = isAdminEmail(emailCheck)
                          
         if (!isNewAdmin) {
             onResult(false)
@@ -396,16 +389,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
 
         viewModelScope.launch(Dispatchers.IO) {
-            // 1. Check local SQLite user account
+            // 1. Check local SQLite user account (by email)
             val localAccount = logDao.getUserAccountSync("local_user")
             if (localAccount != null) {
                 val localEmail = localAccount.email.lowercase().trim()
-                val localName = localAccount.name.lowercase().trim()
-                val isLocalAdmin = localEmail == "admin@omnilog.com" || 
-                                   localEmail.startsWith("admin@") || 
-                                   localEmail == "admin" || 
-                                   localName == "admin" || 
-                                   localName.contains("admin")
+                val isLocalAdmin = isAdminEmail(localEmail)
                                    
                 if (isLocalAdmin && localEmail != emailCheck) {
                     withContext(Dispatchers.Main) {
@@ -420,9 +408,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             val savedEmail = prefs.getString("authenticated_user_email", null)
             if (savedEmail != null) {
                 val savedEmailCheck = savedEmail.lowercase().trim()
-                val isSavedAdmin = savedEmailCheck == "admin@omnilog.com" || 
-                                   savedEmailCheck.startsWith("admin@") || 
-                                   savedEmailCheck == "admin"
+                val isSavedAdmin = isAdminEmail(savedEmailCheck)
                 if (isSavedAdmin && savedEmailCheck != emailCheck) {
                     withContext(Dispatchers.Main) {
                         onResult(true)
@@ -482,11 +468,60 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun updateProfile(updatedAccount: UserAccount) {
         viewModelScope.launch {
+            // Preserve the current admin status — it cannot be changed by profile edits.
+            // The _isAdminUser flag is set only from the authenticated email at login time.
             withContext(Dispatchers.IO) {
                 logDao.updateUserAccount(updatedAccount)
             }
+            // Do NOT re-derive admin status from the updated profile — use current email-based value.
+            val currentEmail = updatedAccount.email
+            val adminStatusPreserved = _isAdminUser.value
             refreshDataInternal()
+            // Restore the authoritative admin flag (refreshDataInternal may reset it from DB data)
+            _isAdminUser.value = adminStatusPreserved
             _uiState.value = UiState.Success("Profile updated.")
+        }
+    }
+
+    /**
+     * Signs out the current user by clearing all local user-specific data from the
+     * Room database and resetting all state flows. This prevents data leakage when
+     * a second user logs in on the same device.
+     */
+    fun signOut() {
+        viewModelScope.launch(Dispatchers.IO) {
+            // Clear all user-scoped data from the local database
+            logDao.deleteAllSync()                          // Clear all log entries
+            logDao.deleteAllInventory()                     // Clear all pantry/inventory items
+            logDao.deleteAllDebts()                         // Clear all debt records
+            logDao.deleteAllInvestments()                   // Clear all investment records
+            logDao.deleteAllSplitExpenses()                 // Clear all split expenses
+            logDao.deleteAllFinancialProfiles()             // Clear financial profile
+            logDao.deleteAllUserAccounts()                  // Clear user account cache
+
+            // Clear the persisted session
+            val prefs = getApplication<Application>().getSharedPreferences("auth_prefs", android.content.Context.MODE_PRIVATE)
+            prefs.edit()
+                .remove("authenticated_user_email")
+                .remove("database_encrypted")
+                .apply()
+
+            // Reset all in-memory state flows
+            withContext(Dispatchers.Main) {
+                _logs.value = emptyList()
+                _inventory.value = emptyList()
+                _debts.value = emptyList()
+                _investments.value = emptyList()
+                _splitExpenses.value = emptyList()
+                _userAccount.value = null
+                _financialProfile.value = null
+                _isAdminUser.value = false
+                _supportTickets.value = emptyList()
+                _customGroups.value = listOf("General", "Home", "Trip")
+                _cloudSyncStatus.value = "Local Sandbox ⚡"
+                _isDatabaseEncrypted.value = false
+                _uiState.value = UiState.Idle
+            }
         }
     }
 
@@ -1373,17 +1408,21 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         if (lifetime.isNotBlank()) {
             _priceLifetimePlan.value = lifetime
         }
-        if (com.example.omnilog.data.firebase.FirebaseSyncManager.isInitialized) {
+        // Must check for a REAL Firebase connection (not a sandbox fallback), same as startCloudSynchronizer.
+        val isRealFirebase = com.example.omnilog.data.firebase.FirebaseSyncManager.isInitialized &&
+                             com.example.omnilog.data.firebase.FirebaseSyncManager.database.app.name != "RoutineLogCloud" &&
+                             isNetworkAvailable()
+        if (isRealFirebase) {
             com.example.omnilog.data.firebase.FirebaseSyncManager.updateAppSettings("pricingPlanMonthly", monthly)
             com.example.omnilog.data.firebase.FirebaseSyncManager.updateAppSettings("pricingPlanYearly", yearly)
             if (lifetime.isNotBlank()) {
                 com.example.omnilog.data.firebase.FirebaseSyncManager.updateAppSettings("pricingPlanLifetime", lifetime)
             }
-            notificationManager.sendAlert("Premium Pricing Overridden 💸", "Plans modified: Monthly=$monthly · Yearly=$yearly")
-            _uiState.value = UiState.Success("Pricing plans updated on Firebase!")
+            notificationManager.sendAlert("Premium Pricing Published 💸", "Live prices updated: Monthly=$monthly · Yearly=$yearly")
+            _uiState.value = UiState.Success("Pricing plans published to Firebase! All users will see new prices.")
         } else {
-            notificationManager.sendAlert("Premium Pricing Updated 💸", "Saved locally in Sandbox Mode.")
-            _uiState.value = UiState.Success("Pricing plans updated locally!")
+            notificationManager.sendAlert("Offline — Pricing Saved Locally ⚡", "Firebase offline or sandbox mode. Prices saved locally only.")
+            _uiState.value = UiState.Error("Firebase offline. Prices updated locally but not published to cloud.")
         }
     }
 

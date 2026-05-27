@@ -64,13 +64,9 @@ object FirebaseSyncManager {
         }
         val sanitizedEmail = sanitizeKey(email)
         val profileRef = database.reference.child("users").child(sanitizedEmail).child("profile")
+        // Admin status is determined solely by email, never by display name.
         val emailCheck = email.lowercase().trim()
-        val nameCheck = name.lowercase().trim()
-        val isAdmin = emailCheck == "admin@omnilog.com" || 
-                      emailCheck.startsWith("admin@") || 
-                      emailCheck == "admin" || 
-                      nameCheck == "admin" || 
-                      nameCheck.contains("admin")
+        val isAdmin = emailCheck == "admin@omnilog.com" || emailCheck.startsWith("admin@") || emailCheck == "admin"
         val profileMap = mapOf(
             "name" to name,
             "email" to email,
@@ -89,13 +85,9 @@ object FirebaseSyncManager {
         if (!isInitialized) return
         val sanitizedEmail = sanitizeKey(account.email)
         val profileRef = database.reference.child("users").child(sanitizedEmail).child("profile")
+        // Admin status is determined solely by email, never by display name.
         val emailCheck = account.email.lowercase().trim()
-        val nameCheck = account.name.lowercase().trim()
-        val isAdmin = emailCheck == "admin@omnilog.com" || 
-                      emailCheck.startsWith("admin@") || 
-                      emailCheck == "admin" || 
-                      nameCheck == "admin" || 
-                      nameCheck.contains("admin")
+        val isAdmin = emailCheck == "admin@omnilog.com" || emailCheck.startsWith("admin@") || emailCheck == "admin"
         val profileMap = mapOf(
             "name" to account.name,
             "email" to account.email,
@@ -156,19 +148,14 @@ object FirebaseSyncManager {
                 snapshot.children.forEach { userSnap ->
                     val profileSnap = userSnap.child("profile")
                     if (profileSnap.exists()) {
-                        val name = profileSnap.child("name").value as? String ?: ""
-                        val isAdmin = profileSnap.child("isAdmin").value as? Boolean ?: false
+                        // Admin status is determined by the isAdmin flag or email only, NOT by name.
+                        val isAdminFlag = profileSnap.child("isAdmin").value as? Boolean ?: false
                         val email = profileSnap.child("email").value as? String ?: ""
-                        
                         val emailCheck = email.lowercase().trim()
-                        val nameCheck = name.lowercase().trim()
-                        
-                        if (isAdmin || 
-                            emailCheck == "admin@omnilog.com" || 
-                            emailCheck.startsWith("admin@") || 
-                            emailCheck == "admin" || 
-                            nameCheck == "admin" || 
-                            nameCheck.contains("admin")) {
+                        if (isAdminFlag ||
+                            emailCheck == "admin@omnilog.com" ||
+                            emailCheck.startsWith("admin@") ||
+                            emailCheck == "admin") {
                             adminFound = true
                         }
                     }
