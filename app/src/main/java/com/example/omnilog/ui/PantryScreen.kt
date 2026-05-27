@@ -154,8 +154,8 @@ fun PantryScreen(viewModel: MainViewModel) {
                                 .fillMaxWidth()
                                 .onFocusChanged { searchFocused = it.isFocused },
                             colors = TextFieldDefaults.colors(
-                                focusedTextColor = Color.White,
-                                unfocusedTextColor = Color.White,
+                                focusedTextColor = MaterialTheme.colorScheme.onSurface,
+                                unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
                                 focusedContainerColor = Color.Transparent,
                                 unfocusedContainerColor = Color.Transparent,
                                 disabledContainerColor = Color.Transparent,
@@ -453,12 +453,12 @@ fun RestockDialog(itemName: String, onDismiss: () -> Unit, onRestock: (Double, D
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     modifier = Modifier.fillMaxWidth(),
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = Color.White,
-                        unfocusedTextColor = Color.White,
+                        focusedTextColor = MaterialTheme.colorScheme.onSurface,
+                        unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
                         focusedBorderColor = BrandCyan,
-                        unfocusedBorderColor = Color.White.copy(alpha = 0.2f),
+                        unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
                         focusedLabelColor = BrandCyan,
-                        unfocusedLabelColor = Color.White.copy(alpha = 0.6f),
+                        unfocusedLabelColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                         cursorColor = BrandCyan
                     ),
                     singleLine = true
@@ -471,12 +471,12 @@ fun RestockDialog(itemName: String, onDismiss: () -> Unit, onRestock: (Double, D
                     modifier = Modifier.fillMaxWidth(),
                     prefix = { Text(getCurrencySymbol(), color = BrandCyan, fontWeight = FontWeight.Bold) },
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = Color.White,
-                        unfocusedTextColor = Color.White,
+                        focusedTextColor = MaterialTheme.colorScheme.onSurface,
+                        unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
                         focusedBorderColor = BrandCyan,
-                        unfocusedBorderColor = Color.White.copy(alpha = 0.2f),
+                        unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
                         focusedLabelColor = BrandCyan,
-                        unfocusedLabelColor = Color.White.copy(alpha = 0.6f),
+                        unfocusedLabelColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                         cursorColor = BrandCyan
                     ),
                     singleLine = true
@@ -533,12 +533,12 @@ fun ManualAddDialog(onDismiss: () -> Unit, onAdd: (String, Double, String) -> Un
                     label = { Text("Item Name") },
                     modifier = Modifier.fillMaxWidth(),
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = Color.White,
-                        unfocusedTextColor = Color.White,
+                        focusedTextColor = MaterialTheme.colorScheme.onSurface,
+                        unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
                         focusedBorderColor = BrandCyan,
-                        unfocusedBorderColor = Color.White.copy(alpha = 0.2f),
+                        unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
                         focusedLabelColor = BrandCyan,
-                        unfocusedLabelColor = Color.White.copy(alpha = 0.6f),
+                        unfocusedLabelColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                         cursorColor = BrandCyan
                     ),
                     singleLine = true
@@ -550,12 +550,12 @@ fun ManualAddDialog(onDismiss: () -> Unit, onAdd: (String, Double, String) -> Un
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     modifier = Modifier.fillMaxWidth(),
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = Color.White,
-                        unfocusedTextColor = Color.White,
+                        focusedTextColor = MaterialTheme.colorScheme.onSurface,
+                        unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
                         focusedBorderColor = BrandCyan,
-                        unfocusedBorderColor = Color.White.copy(alpha = 0.2f),
+                        unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
                         focusedLabelColor = BrandCyan,
-                        unfocusedLabelColor = Color.White.copy(alpha = 0.6f),
+                        unfocusedLabelColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                         cursorColor = BrandCyan
                     ),
                     singleLine = true
@@ -573,12 +573,12 @@ fun ManualAddDialog(onDismiss: () -> Unit, onAdd: (String, Double, String) -> Un
                         },
                         modifier = Modifier.fillMaxWidth(),
                         colors = OutlinedTextFieldDefaults.colors(
-                            focusedTextColor = Color.White,
-                            unfocusedTextColor = Color.White,
+                            focusedTextColor = MaterialTheme.colorScheme.onSurface,
+                            unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
                             focusedBorderColor = BrandCyan,
-                            unfocusedBorderColor = Color.White.copy(alpha = 0.2f),
+                            unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
                             focusedLabelColor = BrandCyan,
-                            unfocusedLabelColor = Color.White.copy(alpha = 0.6f),
+                            unfocusedLabelColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                             cursorColor = BrandCyan
                         ),
                         singleLine = true

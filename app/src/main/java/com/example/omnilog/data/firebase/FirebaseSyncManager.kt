@@ -18,30 +18,60 @@ object FirebaseSyncManager {
     lateinit var auth: FirebaseAuth
     lateinit var database: FirebaseDatabase
 
+    // True when the app is using the real Firebase project (google-services.json credentials).
+    // False means we fell back to the offline sandbox and no cloud writes should happen.
+    var isSandboxMode = true
+        private set
+
     fun initialize(context: Context) {
         if (isInitialized) return
         try {
-            // 1. Try standard default auto-initialization (if google-services.json is present)
-            FirebaseApp.initializeApp(context)
-            auth = FirebaseAuth.getInstance()
-            database = FirebaseDatabase.getInstance()
-            isInitialized = true
+            // The google-services plugin pre-initializes the default FirebaseApp from
+            // google-services.json at app startup via FirebaseInitProvider.
+            // We grab the already-initialized default app here.
+            val defaultApp = try {
+                FirebaseApp.getInstance()
+            } catch (e: Exception) {
+                // Default app not yet initialized — trigger it manually
+                FirebaseApp.initializeApp(context)
+            }
+
+            if (defaultApp != null) {
+                auth = FirebaseAuth.getInstance()
+                // Explicitly use the database URL from google-services.json
+                database = FirebaseDatabase.getInstance(
+                    "https://routinelog-506b7-default-rtdb.firebaseio.com"
+                )
+                isInitialized = true
+                isSandboxMode = false
+                android.util.Log.i("FirebaseSyncManager", "✅ Connected to real Firebase: routinelog-506b7")
+            } else {
+                throw IllegalStateException("FirebaseApp could not be initialized")
+            }
         } catch (e: Exception) {
+            android.util.Log.w("FirebaseSyncManager", "⚠️ Real Firebase init failed: ${e.message}. Falling back to local sandbox.")
             try {
-                // 2. Programmatic fallback initialization with highly stable sandbox options
-                // Ensures compilation/run succeeds out-of-the-box without requiring google-services.json
+                // Sandbox fallback — uses a named app so we can detect it via app.name == "RoutineLogCloud"
                 val options = FirebaseOptions.Builder()
-                    .setApplicationId("1:447558669522:android:2b2f67cc996e38b30d1d78")
-                    .setApiKey("AIzaSyAsbD86Fv3GZ1r23L-dZ2L89kP1123456")
-                    .setDatabaseUrl("https://routinelog-offline-rtdb.firebaseio.com")
-                    .setProjectId("routinelog-offline")
+                    .setApplicationId("1:561344069110:android:9b1f29b2ee5a4062bcdbd7")
+                    .setApiKey("AIzaSyA57InMceEuOkZuX_qobJEuPv8-dYBsJfo")
+                    .setDatabaseUrl("https://routinelog-506b7-default-rtdb.firebaseio.com")
+                    .setProjectId("routinelog-506b7")
                     .build()
-                val app = FirebaseApp.initializeApp(context, options, "RoutineLogCloud")
+                val app = try {
+                    FirebaseApp.initializeApp(context, options, "RoutineLogCloud")
+                } catch (ex: Exception) {
+                    FirebaseApp.getInstance("RoutineLogCloud")
+                }
                 auth = FirebaseAuth.getInstance(app)
                 database = FirebaseDatabase.getInstance(app)
                 isInitialized = true
+                isSandboxMode = true
+                android.util.Log.w("FirebaseSyncManager", "⚠️ Running in sandbox fallback mode")
             } catch (ex: Exception) {
+                android.util.Log.e("FirebaseSyncManager", "❌ All Firebase initialization failed: ${ex.message}")
                 isInitialized = false
+                isSandboxMode = true
             }
         }
     }
@@ -56,8 +86,13 @@ object FirebaseSyncManager {
                   .replace("]", "_rbracket_")
     }
 
+    private fun hashPassword(password: String): String {
+        val bytes = java.security.MessageDigest.getInstance("SHA-256").digest(password.toByteArray())
+        return bytes.joinToString("") { "%02x".format(it) }
+    }
+
     // --- Authentication ---
-    fun registerUserCloud(email: String, name: String, onResult: (Boolean, String?) -> Unit) {
+    fun registerUserCloud(email: String, name: String, mobileNumber: String, password: String = "", onResult: (Boolean, String?) -> Unit) {
         if (!isInitialized) {
             onResult(false, "Firebase is not initialized")
             return
@@ -66,15 +101,17 @@ object FirebaseSyncManager {
         val profileRef = database.reference.child("users").child(sanitizedEmail).child("profile")
         // Admin status is determined solely by email, never by display name.
         val emailCheck = email.lowercase().trim()
-        val isAdmin = emailCheck == "admin@omnilog.com" || emailCheck.startsWith("admin@") || emailCheck == "admin"
+        val isAdmin = emailCheck == "arvaancorelogic@gmail.com"
         val profileMap = mapOf(
             "name" to name,
             "email" to email,
+            "mobileNumber" to mobileNumber,
             "isPro" to isAdmin,
             "proExpiryTimestamp" to (if (isAdmin) 4102444800000L else 0L),
             "subscriptionPlan" to (if (isAdmin) "Lifetime Pro Plan" else "Free Plan"),
             "aiCredits" to (if (isAdmin) 999 else 10),
-            "isAdmin" to isAdmin
+            "isAdmin" to isAdmin,
+            "passwordHash" to hashPassword(password)
         )
         profileRef.setValue(profileMap)
             .addOnSuccessListener { onResult(true, null) }
@@ -87,17 +124,49 @@ object FirebaseSyncManager {
         val profileRef = database.reference.child("users").child(sanitizedEmail).child("profile")
         // Admin status is determined solely by email, never by display name.
         val emailCheck = account.email.lowercase().trim()
-        val isAdmin = emailCheck == "admin@omnilog.com" || emailCheck.startsWith("admin@") || emailCheck == "admin"
-        val profileMap = mapOf(
+        val isAdmin = emailCheck == "arvaancorelogic@gmail.com"
+        val profileMap = mapOf<String, Any>(
             "name" to account.name,
             "email" to account.email,
+            "mobileNumber" to account.mobileNumber,
             "isPro" to (account.isPro || isAdmin),
             "proExpiryTimestamp" to (if (isAdmin) 4102444800000L else account.proExpiryTimestamp),
-            "subscriptionPlan" to (if (isAdmin) "Lifetime Pro Plan" else account.subscriptionPlan),
+            "subscriptionPlan" to (if (isAdmin) "Lifetime Pro Plan" else (account.subscriptionPlan ?: "Free Plan")),
             "aiCredits" to (if (isAdmin) 999 else account.aiCredits),
             "isAdmin" to isAdmin
         )
-        profileRef.setValue(profileMap)
+        profileRef.updateChildren(profileMap)
+    }
+
+    fun verifyLoginCloud(email: String, passwordEntered: String, onResult: (Boolean, String?) -> Unit) {
+        if (!isInitialized) {
+            onResult(false, "Firebase is not initialized")
+            return
+        }
+        val sanitizedEmail = sanitizeKey(email)
+        database.reference.child("users").child(sanitizedEmail).child("profile").get()
+            .addOnSuccessListener { snapshot ->
+                if (!snapshot.exists()) {
+                    onResult(false, "Account not found")
+                    return@addOnSuccessListener
+                }
+                
+                val storedHash = snapshot.child("passwordHash").getValue(String::class.java)
+                if (storedHash == null || storedHash.isEmpty()) {
+                    // Force legacy users to register to set a password
+                    onResult(false, "Please register your account again to set a secure password.")
+                } else {
+                    val enteredHash = hashPassword(passwordEntered)
+                    if (storedHash == enteredHash) {
+                        onResult(true, null)
+                    } else {
+                        onResult(false, "Incorrect password")
+                    }
+                }
+            }
+            .addOnFailureListener { e ->
+                onResult(false, e.message ?: "Failed to verify login")
+            }
     }
 
     fun fetchUserProfile(email: String, onResult: (UserAccount?) -> Unit) {
@@ -115,11 +184,13 @@ object FirebaseSyncManager {
                     val proExpiryTimestamp = (snapshot.child("proExpiryTimestamp").value as? Number)?.toLong() ?: 0L
                     val subscriptionPlan = snapshot.child("subscriptionPlan").value as? String ?: "Free Plan"
                     val aiCredits = (snapshot.child("aiCredits").value as? Number)?.toInt() ?: 10
+                    val mobileNumber = snapshot.child("mobileNumber").value as? String ?: ""
                     
                     val account = UserAccount(
                         userId = "local_user",
                         name = name,
                         email = email,
+                        mobileNumber = mobileNumber,
                         isPro = isPro,
                         proExpiryTimestamp = proExpiryTimestamp,
                         subscriptionPlan = subscriptionPlan,
@@ -153,9 +224,7 @@ object FirebaseSyncManager {
                         val email = profileSnap.child("email").value as? String ?: ""
                         val emailCheck = email.lowercase().trim()
                         if (isAdminFlag ||
-                            emailCheck == "admin@omnilog.com" ||
-                            emailCheck.startsWith("admin@") ||
-                            emailCheck == "admin") {
+                            emailCheck == "arvaancorelogic@gmail.com") {
                             adminFound = true
                         }
                     }
@@ -166,6 +235,17 @@ object FirebaseSyncManager {
                 onResult(false)
             }
         })
+    }
+
+    // --- App Invitations ---
+    fun sendAppInvitation(inviteeEmail: String, senderName: String) {
+        if (!isInitialized) return
+        val inviteRef = database.reference.child("app_invitations").push()
+        inviteRef.setValue(mapOf(
+            "inviteeEmail" to inviteeEmail,
+            "senderName" to senderName,
+            "timestamp" to System.currentTimeMillis()
+        ))
     }
 
     // --- Shared Household Groups ---
@@ -254,7 +334,7 @@ object FirebaseSyncManager {
                                 val splitShare = (snap.child("splitShare").value as? Number)?.toDouble() ?: 0.0
                                 val isSettled = snap.child("isSettled").value as? Boolean ?: false
                                 val timestamp = (snap.child("timestamp").value as? Number)?.toLong() ?: 0L
-                                val groupName = snap.child("groupName").value as? String ?: "General"
+                                val groupName = snap.child("groupName").value as? String ?: ""
 
                                 val split = SplitExpenseEntry(
                                     id = id,

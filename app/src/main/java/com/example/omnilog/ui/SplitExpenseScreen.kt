@@ -1004,7 +1004,7 @@ fun SplitExpenseScreen(viewModel: MainViewModel) {
             familyMembers = familyMembers,
             splitGroups = splitGroups,
             groupInvitedMembers = groupInvitedMembers,
-            defaultGroup = if (selectedGroup == "All") "General" else selectedGroup,
+            defaultGroup = if (selectedGroup == "All") "" else selectedGroup,
             onDismiss = { showAddSplitDialog = false },
             onSave = { title, total, paidBy, splitWith, share, group ->
                 viewModel.addSplitExpense(title, total, paidBy, splitWith, share, group)
@@ -1112,7 +1112,7 @@ fun ManageGroupDialog(
                                 color = BrandRose
                             )
                             Text(
-                                text = "Deleting '$groupName' will permanently remove the group and delete all associated splits and bills in this ledger from both local storage and the cloud. This cannot be undone.",
+                                text = "Deleting '$groupName' will permanently remove the group and delete all associated splits and bills in this ledger from both local storage and online. This cannot be undone.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurface
                             )
@@ -1515,7 +1515,7 @@ fun AddSplitDialog(
     familyMembers: List<String>,
     splitGroups: List<String>,
     groupInvitedMembers: Map<String, List<String>> = emptyMap(),
-    defaultGroup: String = "General",
+    defaultGroup: String = "",
     onDismiss: () -> Unit,
     onSave: (title: String, total: Double, paidBy: String, splitWith: String, share: Double, groupName: String) -> Unit
 ) {

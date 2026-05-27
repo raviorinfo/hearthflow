@@ -1,5 +1,7 @@
 package com.example.omnilog.ui
 
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.BorderStroke
@@ -22,6 +24,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -70,6 +73,10 @@ fun ProfileScreen(viewModel: MainViewModel, onSignOut: () -> Unit = {}) {
     val priceMonthly by viewModel.priceMonthlyPlan.collectAsState()
     val priceYearly by viewModel.priceYearlyPlan.collectAsState()
     val priceLifetime by viewModel.priceLifetimePlan.collectAsState()
+    val paymentGatewayProvider by viewModel.paymentGatewayProvider.collectAsState()
+    val paymentGatewayPublicKey by viewModel.paymentGatewayPublicKey.collectAsState()
+    val paymentGatewaySecretKey by viewModel.paymentGatewaySecretKey.collectAsState()
+    val paymentGatewayUpiId by viewModel.paymentGatewayUpiId.collectAsState()
     val isAdmin by viewModel.isAdminUser.collectAsState()
     val supportTickets by viewModel.supportTickets.collectAsState()
 
@@ -861,6 +868,85 @@ fun ProfileScreen(viewModel: MainViewModel, onSignOut: () -> Unit = {}) {
                 }
             }
 
+            // Invite Friends Section
+            item {
+                Spacer(Modifier.height(16.dp))
+                var inviteEmail by remember { mutableStateOf("") }
+                val context = LocalContext.current
+                
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
+                    shape = RoundedCornerShape(16.dp),
+                    modifier = Modifier.fillMaxWidth(),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.GroupAdd, null, tint = BrandViolet, modifier = Modifier.size(24.dp))
+                            Spacer(Modifier.width(12.dp))
+                            Text(
+                                text = "Invite Friends",
+                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                color = BrandViolet
+                            )
+                        }
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            text = "Invite friends to start tracking their routines and finances securely.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(Modifier.height(12.dp))
+                        
+                        OutlinedTextField(
+                            value = inviteEmail,
+                            onValueChange = { inviteEmail = it },
+                            label = { Text("Friend's Email Address") },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                            colors = getDynamicTextFieldColors(BrandCyan)
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Button(
+                                onClick = {
+                                    if (inviteEmail.isNotBlank()) {
+                                        viewModel.sendAppInvitation(inviteEmail)
+                                        inviteEmail = ""
+                                    }
+                                },
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(10.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = BrandCyan)
+                            ) {
+                                Icon(Icons.Default.Email, null, modifier = Modifier.size(16.dp))
+                                Spacer(Modifier.width(6.dp))
+                                Text("Email Invite")
+                            }
+                            
+                            Button(
+                                onClick = {
+                                    val intent = Intent(Intent.ACTION_SENDTO).apply {
+                                        data = Uri.parse("smsto:")
+                                        putExtra("sms_body", "Hey! Join me on RoutineLog, the ultimate secure hybrid financial ledger. Download it now!")
+                                    }
+                                    context.startActivity(intent)
+                                },
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(10.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = BrandEmerald)
+                            ) {
+                                Icon(Icons.Default.Phone, null, modifier = Modifier.size(16.dp))
+                                Spacer(Modifier.width(6.dp))
+                                Text("SMS Invite")
+                            }
+                        }
+                    }
+                }
+            }
+
             // Sign Out Button
             item {
                 Spacer(Modifier.height(16.dp))
@@ -998,7 +1084,7 @@ fun ProfileScreen(viewModel: MainViewModel, onSignOut: () -> Unit = {}) {
                             Text("☁️", fontSize = 16.sp)
                             Spacer(Modifier.width(8.dp))
                             Text(
-                                text = "Firebase Sync (Cloud Mode)",
+                                text = "Firebase Sync (Online Mode)",
                                 style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
                                 color = BrandCyan
                             )
@@ -1372,6 +1458,10 @@ fun ProfileScreen(viewModel: MainViewModel, onSignOut: () -> Unit = {}) {
         var editedAboutText by remember(aboutUsText) { mutableStateOf(aboutUsText) }
         var editedPriceMonthly by remember(priceMonthly) { mutableStateOf(priceMonthly) }
         var editedPriceYearly by remember(priceYearly) { mutableStateOf(priceYearly) }
+        var editedPaymentProvider by remember(paymentGatewayProvider) { mutableStateOf(paymentGatewayProvider) }
+        var editedPaymentPublic by remember(paymentGatewayPublicKey) { mutableStateOf(paymentGatewayPublicKey) }
+        var editedPaymentSecret by remember(paymentGatewaySecretKey) { mutableStateOf(paymentGatewaySecretKey) }
+        var editedPaymentUpiId by remember(paymentGatewayUpiId) { mutableStateOf(paymentGatewayUpiId) }
 
         AlertDialog(
             onDismissRequest = { showAdminConsoleDialog = false },
@@ -1389,33 +1479,27 @@ fun ProfileScreen(viewModel: MainViewModel, onSignOut: () -> Unit = {}) {
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                     modifier = Modifier.fillMaxWidth().padding(top = 4.dp)
                 ) {
-                    // Navigation Tabs
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        val tabs = listOf("Legals" to "📝 Legals", "Pricing" to "💸 Pricing", "Tickets" to "🎟️ Tickets")
-                        tabs.forEach { (tabId, label) ->
-                            val isSelected = adminTab == tabId
-                            Box(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .background(if (isSelected) BrandViolet.copy(alpha = 0.15f) else Color.Transparent)
-                                    .border(
-                                        width = 0.5.dp,
-                                        color = if (isSelected) BrandViolet else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f),
-                                        shape = RoundedCornerShape(8.dp)
-                                    )
-                                    .clickable { adminTab = tabId }
-                                    .padding(vertical = 8.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = label,
-                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                                    color = if (isSelected) BrandViolet else MaterialTheme.colorScheme.onSurface
-                                )
+                    // Navigation Dashboard (2x2 Grid)
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                        val tabs = listOf(
+                            "Legals" to "📝 Legals", "Pricing" to "💸 Pricing",
+                            "Gateway" to "💳 Gateway", "Tickets" to "🎟️ Tickets"
+                        )
+                        for (rowTabs in tabs.chunked(2)) {
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                                rowTabs.forEach { (tabId, label) ->
+                                    val isSelected = adminTab == tabId
+                                    Box(
+                                        modifier = Modifier.weight(1f).clip(RoundedCornerShape(8.dp))
+                                            .background(if (isSelected) BrandViolet.copy(alpha = 0.15f) else Color.Transparent)
+                                            .border(width = 0.5.dp, color = if (isSelected) BrandViolet else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f), shape = RoundedCornerShape(8.dp))
+                                            .clickable { adminTab = tabId }
+                                            .padding(vertical = 12.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(text = label, style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold), color = if (isSelected) BrandViolet else MaterialTheme.colorScheme.onSurface)
+                                    }
+                                }
                             }
                         }
                     }
@@ -1427,7 +1511,7 @@ fun ProfileScreen(viewModel: MainViewModel, onSignOut: () -> Unit = {}) {
                         "Legals" -> {
                             Column(
                                 verticalArrangement = Arrangement.spacedBy(10.dp),
-                                modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).heightIn(max = 320.dp)
+                                modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState())
                             ) {
                                 Text(
                                     text = "About Us Workspace Info",
@@ -1466,9 +1550,9 @@ fun ProfileScreen(viewModel: MainViewModel, onSignOut: () -> Unit = {}) {
                                     },
                                     shape = RoundedCornerShape(10.dp),
                                     colors = ButtonDefaults.buttonColors(containerColor = BrandCyan),
-                                    modifier = Modifier.fillMaxWidth().pressScale().padding(top = 4.dp)
+                                    modifier = Modifier.fillMaxWidth().pressScale().padding(top = 4.dp, bottom = 16.dp)
                                 ) {
-                                    Text("💾 Sync Legals to Cloud", fontWeight = FontWeight.Bold, color = Color.White)
+                                    Text("💾 Publish Content", fontWeight = FontWeight.Bold, color = Color.White)
                                 }
                             }
                         }
@@ -1630,6 +1714,57 @@ fun ProfileScreen(viewModel: MainViewModel, onSignOut: () -> Unit = {}) {
                                             }
                                         }
                                     }
+                                }
+                            }
+                        }
+                        "Gateway" -> {
+                            Column(
+                                verticalArrangement = Arrangement.spacedBy(10.dp),
+                                modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState())
+                            ) {
+                                Text(
+                                    text = "Payment Gateway Config",
+                                    style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                OutlinedTextField(
+                                    value = editedPaymentProvider,
+                                    onValueChange = { editedPaymentProvider = it },
+                                    label = { Text("Provider (e.g. Stripe, Razorpay)") },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    colors = getDynamicTextFieldColors(BrandEmerald)
+                                )
+                                OutlinedTextField(
+                                    value = editedPaymentPublic,
+                                    onValueChange = { editedPaymentPublic = it },
+                                    label = { Text("Public / Client Key") },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    colors = getDynamicTextFieldColors(BrandCyan)
+                                )
+                                OutlinedTextField(
+                                    value = editedPaymentSecret,
+                                    onValueChange = { editedPaymentSecret = it },
+                                    label = { Text("Secret Key") },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    colors = getDynamicTextFieldColors(BrandViolet)
+                                )
+                                OutlinedTextField(
+                                    value = editedPaymentUpiId,
+                                    onValueChange = { editedPaymentUpiId = it },
+                                    label = { Text("UPI ID (e.g. user@ybl)") },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    colors = getDynamicTextFieldColors(BrandRose)
+                                )
+                                
+                                Button(
+                                    onClick = {
+                                        viewModel.updatePaymentGateway(editedPaymentProvider, editedPaymentPublic, editedPaymentSecret, editedPaymentUpiId)
+                                    },
+                                    shape = RoundedCornerShape(10.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = BrandEmerald),
+                                    modifier = Modifier.fillMaxWidth().pressScale()
+                                ) {
+                                    Text("💳 Save Gateway Config", fontWeight = FontWeight.Bold, color = Color.White)
                                 }
                             }
                         }

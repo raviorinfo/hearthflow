@@ -226,8 +226,8 @@ fun DebtSimulatorScreen(viewModel: MainViewModel) {
                                 unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
                                 focusedLabelColor = BrandViolet,
                                 unfocusedLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                                focusedTextColor = Color.White,
-                                unfocusedTextColor = Color.White,
+                                focusedTextColor = MaterialTheme.colorScheme.onSurface,
+                                unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
                                 cursorColor = BrandViolet,
                                 focusedContainerColor = Color(0x10FFFFFF),
                                 unfocusedContainerColor = Color(0x05FFFFFF),
@@ -263,7 +263,7 @@ fun DebtSimulatorScreen(viewModel: MainViewModel) {
                                 "Strategy Comparison Matrix",
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold,
-                                color = Color.White
+                                color = MaterialTheme.colorScheme.onSurface
                             )
                         }
                         
@@ -292,9 +292,9 @@ fun DebtSimulatorScreen(viewModel: MainViewModel) {
                                 .padding(vertical = 6.dp, horizontal = 12.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text("Months to Free", modifier = Modifier.weight(1.2f), style = MaterialTheme.typography.bodySmall, color = Color.White)
-                            Text("$sbMonths months", modifier = Modifier.weight(1.1f), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, color = Color.White, textAlign = TextAlign.End)
-                            Text("$avMonths months", modifier = Modifier.weight(1.1f), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, color = Color.White, textAlign = TextAlign.End)
+                            Text("Months to Free", modifier = Modifier.weight(1.2f), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface)
+                            Text("$sbMonths months", modifier = Modifier.weight(1.1f), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface, textAlign = TextAlign.End)
+                            Text("$avMonths months", modifier = Modifier.weight(1.1f), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface, textAlign = TextAlign.End)
                         }
 
                         Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(Color(0x0BFFFFFF)))
@@ -308,7 +308,7 @@ fun DebtSimulatorScreen(viewModel: MainViewModel) {
                                 .padding(vertical = 6.dp, horizontal = 12.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text("Target Year", modifier = Modifier.weight(1.2f), style = MaterialTheme.typography.bodySmall, color = Color.White)
+                            Text("Target Year", modifier = Modifier.weight(1.2f), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface)
                             Text("${sbCal.get(Calendar.YEAR)}", modifier = Modifier.weight(1.1f), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, color = BrandVioletText, textAlign = TextAlign.End)
                             Text("${avCal.get(Calendar.YEAR)}", modifier = Modifier.weight(1.1f), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, color = BrandCyan, textAlign = TextAlign.End)
                         }
@@ -322,7 +322,7 @@ fun DebtSimulatorScreen(viewModel: MainViewModel) {
                                 .padding(vertical = 6.dp, horizontal = 12.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text("Total Interest Paid", modifier = Modifier.weight(1.2f), style = MaterialTheme.typography.bodySmall, color = Color.White)
+                            Text("Total Interest Paid", modifier = Modifier.weight(1.2f), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface)
                             Text(formatCurrency(sbInterest), modifier = Modifier.weight(1.1f), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, color = BrandRose, textAlign = TextAlign.End)
                             Text(formatCurrency(avInterest), modifier = Modifier.weight(1.1f), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, color = BrandRose, textAlign = TextAlign.End)
                         }
@@ -340,7 +340,7 @@ fun DebtSimulatorScreen(viewModel: MainViewModel) {
                                 .padding(vertical = 6.dp, horizontal = 12.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text("Interest Saved", modifier = Modifier.weight(1.2f), style = MaterialTheme.typography.bodySmall, color = Color.White)
+                            Text("Interest Saved", modifier = Modifier.weight(1.2f), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurface)
                             Text(formatCurrency(sbSaved), modifier = Modifier.weight(1.1f), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, color = BrandEmerald, textAlign = TextAlign.End)
                             Text(formatCurrency(avSaved), modifier = Modifier.weight(1.1f), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, color = BrandEmerald, textAlign = TextAlign.End)
                         }

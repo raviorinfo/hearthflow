@@ -3,6 +3,7 @@ plugins {
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
     alias(libs.plugins.ksp)
+    alias(libs.plugins.google.services)
 }
 
 java {

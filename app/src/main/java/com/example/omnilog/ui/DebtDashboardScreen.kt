@@ -590,8 +590,8 @@ fun DebtDashboardScreen(viewModel: MainViewModel) {
                                             .fillMaxWidth()
                                             .onFocusChanged { amountFocused = it.isFocused },
                                         colors = TextFieldDefaults.colors(
-                                            focusedTextColor = Color.White,
-                                            unfocusedTextColor = Color.White,
+                                            focusedTextColor = MaterialTheme.colorScheme.onSurface,
+                                            unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
                                             focusedContainerColor = Color.Transparent,
                                             unfocusedContainerColor = Color.Transparent,
                                             disabledContainerColor = Color.Transparent,

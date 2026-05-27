@@ -181,6 +181,36 @@ fun DebtPlannerScreen(viewModel: MainViewModel) {
                             color = BrandRose
                         )
                     }
+
+                    Spacer(Modifier.height(4.dp))
+                    HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
+                    Spacer(Modifier.height(4.dp))
+
+                    val totalMinPayments = remember(debts) { debts.sumOf { it.minPayment } }
+                    val totalContributions = remember(investments) { investments.sumOf { it.monthlyContribution } }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text("Monthly Min Payments", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(
+                                text = formatCurrency(totalMinPayments),
+                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                                color = BrandRose
+                            )
+                        }
+                        Column(horizontalAlignment = Alignment.End) {
+                            Text("Monthly Contributions", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(
+                                text = formatCurrency(totalContributions),
+                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                                color = BrandCyan
+                            )
+                        }
+                    }
                 }
             }
 
@@ -309,6 +339,9 @@ fun DebtPlannerScreen(viewModel: MainViewModel) {
                         }
                     }
                 } else {
+                    DebtStrategyCard(debts)
+                    Spacer(Modifier.height(16.dp))
+
                     LazyColumn(
                         modifier = Modifier.weight(1f),
                         verticalArrangement = Arrangement.spacedBy(10.dp)
@@ -476,6 +509,134 @@ fun DebtPlannerScreen(viewModel: MainViewModel) {
 }
 
 @Composable
+fun DebtStrategyCard(debts: List<DebtEntry>) {
+    if (debts.isEmpty() || debts.size == 1) return
+
+    val isDark = isSystemInDarkTheme()
+    val bg = if (isDark) Color(0x15FFFFFF) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
+    
+    val highestInterest = debts.maxByOrNull { it.interestRate }
+    val lowestBalance = debts.minByOrNull { it.balance }
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(20.dp))
+            .background(bg)
+            .border(1.dp, BrandAmber.copy(alpha = 0.3f), RoundedCornerShape(20.dp))
+            .padding(18.dp)
+    ) {
+        Column {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.Lightbulb, contentDescription = null, tint = BrandAmber, modifier = Modifier.size(20.dp))
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    text = "Recommended Strategy",
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            }
+            Spacer(Modifier.height(12.dp))
+
+            if (highestInterest != null && lowestBalance != null) {
+                if (highestInterest.id == lowestBalance.id) {
+                    Text(
+                        text = "Focus all extra payments on '${highestInterest.name}'. It has both the highest interest rate and the lowest balance. This is an optimal target for fast payoff.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                } else {
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Row {
+                            Box(modifier = Modifier.size(4.dp).clip(CircleShape).background(BrandRose).align(Alignment.CenterVertically))
+                            Spacer(Modifier.width(8.dp))
+                            Column {
+                                Text("Avalanche Method (Save Money)", style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold), color = MaterialTheme.colorScheme.onSurface)
+                                Text("Focus extra payments on '${highestInterest.name}' (${highestInterest.interestRate}%) to minimize total interest paid.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
+                        Row {
+                            Box(modifier = Modifier.size(4.dp).clip(CircleShape).background(BrandCyan).align(Alignment.CenterVertically))
+                            Spacer(Modifier.width(8.dp))
+                            Column {
+                                Text("Snowball Method (Psychological Win)", style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold), color = MaterialTheme.colorScheme.onSurface)
+                                Text("Pay off '${lowestBalance.name}' (${formatCurrency(lowestBalance.balance)}) first to clear an account quickly.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+
+// --- Financial Math Utilities ---
+
+data class PayoffProjection(
+    val months: Int,
+    val totalInterest: Double,
+    val totalCost: Double,
+    val isNegativeAmortization: Boolean
+)
+
+fun calculatePayoff(balance: Double, apr: Double, minPayment: Double): PayoffProjection {
+    if (balance <= 0) return PayoffProjection(0, 0.0, 0.0, false)
+    if (apr <= 0) {
+        val months = if (minPayment > 0) Math.ceil(balance / minPayment).toInt() else -1
+        return PayoffProjection(months, 0.0, balance, months == -1)
+    }
+    
+    val monthlyRate = apr / 100.0 / 12.0
+    val interestThisMonth = balance * monthlyRate
+    
+    if (minPayment <= interestThisMonth) {
+        return PayoffProjection(-1, 0.0, 0.0, true) // Negative amortization
+    }
+    
+    val monthsDouble = -Math.log(1.0 - (monthlyRate * balance) / minPayment) / Math.log(1.0 + monthlyRate)
+    val months = Math.ceil(monthsDouble).toInt()
+    
+    // In reality the final month is a partial payment, but multiplying gives a close estimate
+    // A slightly more accurate cost is:
+    var remainingBalance = balance
+    var totalCost = 0.0
+    var monthCount = 0
+    while (remainingBalance > 0 && monthCount < 1200) { // cap at 100 years
+        monthCount++
+        val interest = remainingBalance * monthlyRate
+        val payment = minOf(minPayment, remainingBalance + interest)
+        totalCost += payment
+        remainingBalance = remainingBalance + interest - payment
+    }
+    
+    val totalInterest = totalCost - balance
+    return PayoffProjection(monthCount, totalInterest, totalCost, false)
+}
+
+data class InvestmentProjection(
+    val futureValue: Double,
+    val totalContributions: Double,
+    val totalGrowth: Double
+)
+
+fun calculate10YearInvestment(balance: Double, monthlyContribution: Double, annualReturnRate: Double): InvestmentProjection {
+    val months = 120
+    val monthlyRate = annualReturnRate / 100.0 / 12.0
+    
+    var futureValue = balance
+    for (i in 1..months) {
+        futureValue += monthlyContribution
+        futureValue *= (1.0 + monthlyRate)
+    }
+    
+    val totalContributions = balance + (monthlyContribution * months)
+    val totalGrowth = futureValue - totalContributions
+    
+    return InvestmentProjection(futureValue, totalContributions, totalGrowth)
+}
+
+@Composable
 fun DebtItemCard(
     debt: DebtEntry,
     onEdit: () -> Unit,
@@ -604,6 +765,53 @@ fun DebtItemCard(
                         )
                     }
                 }
+                
+                Spacer(Modifier.height(16.dp))
+                HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f))
+                Spacer(Modifier.height(12.dp))
+
+                // Payoff Projection Section
+                val projection = remember(debt) {
+                    calculatePayoff(debt.balance, debt.interestRate, debt.minPayment)
+                }
+
+                if (projection.isNegativeAmortization) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.Warning, null, tint = BrandRose, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            text = "Warning: Payment too low. Balance will grow forever.",
+                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                            color = BrandRose
+                        )
+                    }
+                } else {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text("Est. Payoff Time", style = MaterialTheme.typography.labelSmall, color = subTextColor)
+                            val years = projection.months / 12
+                            val months = projection.months % 12
+                            val timeStr = if (years > 0) "${years}y ${months}m" else "${months}m"
+                            Text(
+                                text = timeStr,
+                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                                color = textColor
+                            )
+                        }
+                        Column(horizontalAlignment = Alignment.End) {
+                            Text("Total Interest", style = MaterialTheme.typography.labelSmall, color = subTextColor)
+                            Text(
+                                text = formatCurrency(projection.totalInterest),
+                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                                color = aprBadgeColor
+                            )
+                        }
+                    }
+                }
             }
             
             Row(
@@ -720,6 +928,38 @@ fun InvestmentItemCard(
                             style = MaterialTheme.typography.titleMedium,
                             color = BrandCyan,
                             fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+                
+                Spacer(Modifier.height(16.dp))
+                HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f))
+                Spacer(Modifier.height(12.dp))
+
+                // 10-Year Projection Section
+                val projection = remember(investment) {
+                    calculate10YearInvestment(investment.balance, investment.monthlyContribution, investment.expectedReturnRate)
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text("10-Year Projection", style = MaterialTheme.typography.labelSmall, color = subTextColor)
+                        Text(
+                            text = formatCurrency(projection.futureValue),
+                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                            color = rateBadgeColor
+                        )
+                    }
+                    Column(horizontalAlignment = Alignment.End) {
+                        Text("Compound Growth", style = MaterialTheme.typography.labelSmall, color = subTextColor)
+                        Text(
+                            text = "+${formatCurrency(projection.totalGrowth)}",
+                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                            color = BrandEmerald
                         )
                     }
                 }
@@ -1087,14 +1327,18 @@ fun DialogTextField(
         TextField(
             value = value,
             onValueChange = onValueChange,
-            label = { Text(label, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)) },
-            prefix = if (prefix.isNotEmpty()) { { Text(prefix, color = BrandVioletText) } } else null,
+            textStyle = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface),
+            label = { Text(label, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.9f)) },
+            prefix = if (prefix.isNotEmpty()) { { Text(prefix, color = BrandCyan) } } else null,
             modifier = Modifier
                 .fillMaxWidth()
                 .onFocusChanged { isFocused = it.isFocused },
             colors = TextFieldDefaults.colors(
                 focusedTextColor = MaterialTheme.colorScheme.onSurface,
                 unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
+                cursorColor = BrandCyan,
+                focusedLabelColor = BrandCyan,
+                unfocusedLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
                 focusedContainerColor = Color.Transparent,
                 unfocusedContainerColor = Color.Transparent,
                 disabledContainerColor = Color.Transparent,

@@ -14,5 +14,5 @@ data class SplitExpenseEntry(
     var splitShare: Double = 0.0,
     var isSettled: Boolean = false,
     var timestamp: Long = System.currentTimeMillis(),
-    var groupName: String = "General"
+    var groupName: String = ""
 )

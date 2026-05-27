@@ -47,6 +47,7 @@ fun LoginScreen(viewModel: MainViewModel, onLoginSuccess: () -> Unit) {
     var authMode by remember { mutableStateOf(AuthMode.LOGIN) }
     var name            by remember { mutableStateOf("") }
     var email           by remember { mutableStateOf("") }
+    var mobileNumber    by remember { mutableStateOf("") }
     var password        by remember { mutableStateOf("") }
     var confirmPassword by remember { mutableStateOf("") }
     var errorText       by remember { mutableStateOf<String?>(null) }
@@ -66,13 +67,16 @@ fun LoginScreen(viewModel: MainViewModel, onLoginSuccess: () -> Unit) {
     }
 
     fun resetFields() {
-        name = ""; email = ""; password = ""; confirmPassword = ""
+        name = ""; email = ""; mobileNumber = ""; password = ""; confirmPassword = ""
         errorText = null; successText = null; isLoading = false
     }
 
     fun validate(): Boolean {
         if (authMode == AuthMode.REGISTER && name.isBlank()) {
             errorText = "Please enter your full name"; return false
+        }
+        if (authMode == AuthMode.REGISTER && mobileNumber.isBlank()) {
+            errorText = "Please enter your mobile number"; return false
         }
         if (email.isBlank() || !android.util.Patterns.EMAIL_ADDRESS.matcher(email).matches()) {
             errorText = "Please enter a valid email address"; return false
@@ -187,13 +191,22 @@ fun LoginScreen(viewModel: MainViewModel, onLoginSuccess: () -> Unit) {
 
                     Spacer(Modifier.height(24.dp))
 
-                    // Full Name Input (Register only)
+                    // Full Name and Mobile (Register only)
                     if (mode == AuthMode.REGISTER) {
                         PremiumTextField(
                             value = name,
                             onValueChange = { name = it; errorText = null },
                             label = "Full Name",
                             leadingIcon = { Icon(Icons.Default.Person, null, tint = MaterialTheme.colorScheme.primary) }
+                        )
+                        Spacer(Modifier.height(14.dp))
+                        
+                        PremiumTextField(
+                            value = mobileNumber,
+                            onValueChange = { mobileNumber = it; errorText = null },
+                            label = "Mobile Number",
+                            leadingIcon = { Icon(Icons.Default.Phone, null, tint = MaterialTheme.colorScheme.primary) },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone)
                         )
                         Spacer(Modifier.height(14.dp))
                     }
@@ -331,7 +344,7 @@ fun LoginScreen(viewModel: MainViewModel, onLoginSuccess: () -> Unit) {
                                             } else {
                                                 val prefs = context.getSharedPreferences("auth_prefs", android.content.Context.MODE_PRIVATE)
                                                 prefs.edit().putString("saved_password", password).apply()
-                                                viewModel.registerUser(name, email) {
+                                                viewModel.registerUser(name, email, mobileNumber, password) {
                                                     isLoading = false
                                                     onLoginSuccess()
                                                 }
@@ -350,19 +363,14 @@ fun LoginScreen(viewModel: MainViewModel, onLoginSuccess: () -> Unit) {
                                         isLoading = true
                                         viewModel.loginUser(
                                             email = email,
+                                            passwordEntered = password,
                                             onSuccess = {
                                                 isLoading = false
                                                 onLoginSuccess()
                                             },
                                             onFailure = { cloudError ->
-                                                // Save password locally and log in offline via Local Sandbox fallback
-                                                val prefs = context.getSharedPreferences("auth_prefs", android.content.Context.MODE_PRIVATE)
-                                                prefs.edit().putString("saved_password", password).apply()
-                                                
-                                                viewModel.loginUserOffline(email) {
-                                                    isLoading = false
-                                                    onLoginSuccess()
-                                                }
+                                                isLoading = false
+                                                errorText = cloudError
                                             }
                                         )
                                     }

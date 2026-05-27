@@ -55,7 +55,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _splitExpenses = MutableStateFlow<List<SplitExpenseEntry>>(emptyList())
     val splitExpenses: StateFlow<List<SplitExpenseEntry>> = _splitExpenses.asStateFlow()
 
-    private val _customGroups = MutableStateFlow<List<String>>(listOf("General", "Home", "Trip"))
+    private val _customGroups = MutableStateFlow<List<String>>(emptyList())
     val splitGroups: StateFlow<List<String>> = _customGroups.asStateFlow()
 
     private val _groupInvitedMembers = MutableStateFlow<Map<String, List<String>>>(emptyMap())
@@ -72,6 +72,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _aboutUsText = MutableStateFlow("RoutineLog is a premium hybrid financial ledger designed for absolute privacy, speed, and visual elegance. It operates seamlessly in both local offline sandbox and secure cloud-synced sharing modes.")
     val aboutUsText: StateFlow<String> = _aboutUsText.asStateFlow()
+
+    private val _paymentGatewayProvider = MutableStateFlow("")
+    val paymentGatewayProvider: StateFlow<String> = _paymentGatewayProvider.asStateFlow()
+
+    private val _paymentGatewayPublicKey = MutableStateFlow("")
+    val paymentGatewayPublicKey: StateFlow<String> = _paymentGatewayPublicKey.asStateFlow()
+
+    private val _paymentGatewaySecretKey = MutableStateFlow("")
+    val paymentGatewaySecretKey: StateFlow<String> = _paymentGatewaySecretKey.asStateFlow()
+
+    private val _paymentGatewayUpiId = MutableStateFlow("")
+    val paymentGatewayUpiId: StateFlow<String> = _paymentGatewayUpiId.asStateFlow()
 
     private val _priceMonthlyPlan = MutableStateFlow("₹199")
     val priceMonthlyPlan: StateFlow<String> = _priceMonthlyPlan.asStateFlow()
@@ -103,11 +115,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             startCloudSynchronizer(email)
         }
 
-        // Global settings observer as soon as application boots up if Firebase is initialized
-        if (com.example.omnilog.data.firebase.FirebaseSyncManager.isInitialized) {
+        // Global settings observer as soon as application boots up if Firebase is connected to the real project
+        if (com.example.omnilog.data.firebase.FirebaseSyncManager.isInitialized &&
+            !com.example.omnilog.data.firebase.FirebaseSyncManager.isSandboxMode) {
             com.example.omnilog.data.firebase.FirebaseSyncManager.observeAppSettings { settings ->
                 (settings["privacyPolicy"] as? String)?.let { _privacyPolicyText.value = it }
                 (settings["aboutUs"] as? String)?.let { _aboutUsText.value = it }
+                (settings["paymentGatewayProvider"] as? String)?.let { _paymentGatewayProvider.value = it }
+                (settings["paymentGatewayPublicKey"] as? String)?.let { _paymentGatewayPublicKey.value = it }
+                (settings["paymentGatewaySecretKey"] as? String)?.let { _paymentGatewaySecretKey.value = it }
+                (settings["paymentGatewayUpiId"] as? String)?.let { _paymentGatewayUpiId.value = it }
                 (settings["pricingPlanMonthly"] as? String)?.let { _priceMonthlyPlan.value = it }
                 (settings["pricingPlanYearly"] as? String)?.let { _priceYearlyPlan.value = it }
                 (settings["pricingPlanLifetime"] as? String)?.let { _priceLifetimePlan.value = it }
@@ -127,7 +144,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     // Admin status is determined SOLELY by email, never by display name, to prevent privilege escalation.
     private fun isAdminEmail(email: String): Boolean {
         val trimmedEmail = email.lowercase().trim()
-        return trimmedEmail == "admin@omnilog.com" || trimmedEmail.startsWith("admin@") || trimmedEmail == "admin"
+        return trimmedEmail == "arvaancorelogic@gmail.com"
     }
 
     fun startCloudSynchronizer(email: String) {
@@ -135,14 +152,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val isUserAdmin = isAdminEmail(trimmedEmail)
         _isAdminUser.value = isUserAdmin
 
-        val isRealFirebase = com.example.omnilog.data.firebase.FirebaseSyncManager.isInitialized && 
-                             com.example.omnilog.data.firebase.FirebaseSyncManager.database.app.name != "RoutineLogCloud"
+        val isRealFirebase = com.example.omnilog.data.firebase.FirebaseSyncManager.isInitialized &&
+                             !com.example.omnilog.data.firebase.FirebaseSyncManager.isSandboxMode
 
         if (!isRealFirebase || !isNetworkAvailable()) {
-            _cloudSyncStatus.value = "Local Sandbox ⚡"
+            _cloudSyncStatus.value = "Local Mode ⚡"
             return
         }
-        _cloudSyncStatus.value = "Connected ☁️"
+        _cloudSyncStatus.value = "Connected 🟢"
 
         // 1. Listen to splits and custom groups containing our email in real-time
         com.example.omnilog.data.firebase.FirebaseSyncManager.observeRealtimeSplits(email) { cloudSplits ->
@@ -164,6 +181,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         com.example.omnilog.data.firebase.FirebaseSyncManager.observeAppSettings { settings ->
             (settings["privacyPolicy"] as? String)?.let { _privacyPolicyText.value = it }
             (settings["aboutUs"] as? String)?.let { _aboutUsText.value = it }
+            (settings["paymentGatewayProvider"] as? String)?.let { _paymentGatewayProvider.value = it }
+            (settings["paymentGatewayPublicKey"] as? String)?.let { _paymentGatewayPublicKey.value = it }
+            (settings["paymentGatewaySecretKey"] as? String)?.let { _paymentGatewaySecretKey.value = it }
             (settings["pricingPlanMonthly"] as? String)?.let { _priceMonthlyPlan.value = it }
             (settings["pricingPlanYearly"] as? String)?.let { _priceYearlyPlan.value = it }
             (settings["pricingPlanLifetime"] as? String)?.let { _priceLifetimePlan.value = it }
@@ -246,21 +266,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _uiState = MutableStateFlow<UiState>(UiState.Idle)
     val uiState: StateFlow<UiState> = _uiState
 
-
-
-    fun registerUser(name: String, email: String, onSuccess: () -> Unit) {
+    fun registerUser(name: String, email: String, mobileNumber: String, password: String = "", onSuccess: () -> Unit) {
         viewModelScope.launch(Dispatchers.IO) {
-            // 1. Sync/Register in Firebase first if initialized
-            if (com.example.omnilog.data.firebase.FirebaseSyncManager.isInitialized) {
-                com.example.omnilog.data.firebase.FirebaseSyncManager.registerUserCloud(email, name) { _, _ -> }
+            val isRealFirebase = com.example.omnilog.data.firebase.FirebaseSyncManager.isInitialized && !com.example.omnilog.data.firebase.FirebaseSyncManager.isSandboxMode && isNetworkAvailable()
+            if (isRealFirebase) {
+                com.example.omnilog.data.firebase.FirebaseSyncManager.registerUserCloud(email, name, mobileNumber, password) { _, _ -> }
             }
 
             // userId must be "local_user" so it matches the DAO query getUserAccount("local_user")
             val existing = logDao.getUserAccountSync("local_user")
             val newUser = if (existing != null) {
-                existing.copy(name = name, email = email)
+                existing.copy(name = name, email = email, mobileNumber = mobileNumber)
             } else {
-                UserAccount("local_user", name, email)
+                UserAccount("local_user", name, email, mobileNumber)
             }
             logDao.updateUserAccount(newUser)
             refreshDataInternal()
@@ -271,37 +289,36 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             withContext(Dispatchers.Main) {
                 startCloudSynchronizer(email)
                 _uiState.value = UiState.Success("Welcome, $name!")
+                _uiState.value = UiState.Success("Welcome, $name!", System.currentTimeMillis())
                 notificationManager.sendAlert(
                     "Welcome to RoutineLog! 🎉", 
-                    "Your cloud-synced account is active, $name."
+                    "Your online account is active, $name."
                 )
                 onSuccess()
             }
         }
     }
 
-    fun loginUser(email: String, onSuccess: () -> Unit, onFailure: (String) -> Unit) {
+    fun loginUser(email: String, passwordEntered: String = "", onSuccess: () -> Unit, onFailure: (String) -> Unit) {
         viewModelScope.launch(Dispatchers.IO) {
             val trimmedEmail = email.lowercase().trim()
-            val isUserAdmin = trimmedEmail == "admin@omnilog.com" || 
-                              trimmedEmail.startsWith("admin@") || 
-                              trimmedEmail == "admin"
+            val isUserAdmin = trimmedEmail == "arvaancorelogic@gmail.com"
 
             // 1. Instantly fallback if we are in local sandbox simulation mode (fallback database active)
-            val isRealFirebase = com.example.omnilog.data.firebase.FirebaseSyncManager.isInitialized && 
-                                 com.example.omnilog.data.firebase.FirebaseSyncManager.database.app.name != "RoutineLogCloud"
+            val isRealFirebase = com.example.omnilog.data.firebase.FirebaseSyncManager.isInitialized &&
+                                 !com.example.omnilog.data.firebase.FirebaseSyncManager.isSandboxMode
 
             if (!isRealFirebase) {
                 withContext(Dispatchers.Main) {
-                    onFailure("Firebase database sandbox active. Falling back to local sandbox instantly.")
+                    onFailure("Firebase database connection is not active. Please connect to the internet.")
                 }
                 return@launch
             }
 
-            // 2. Instantly fallback if the device is completely offline
+            // 2. Fail if the device is completely offline
             if (!isNetworkAvailable()) {
                 withContext(Dispatchers.Main) {
-                    onFailure("Device is offline. Falling back to local sandbox instantly.")
+                    onFailure("Device is offline. An internet connection is strictly required to log in.")
                 }
                 return@launch
             }
@@ -315,36 +332,47 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 if (!callbackInvoked) {
                     callbackInvoked = true
                     withContext(Dispatchers.Main) {
-                        onFailure("Firebase connection timed out. Falling back to local sandbox.")
+                        onFailure("Firebase connection timed out. Please check your internet connection and try again.")
                     }
                 }
             }
 
-            com.example.omnilog.data.firebase.FirebaseSyncManager.fetchUserProfile(email) { cloudAccount ->
+            // 3. Verify password via cloud 
+            com.example.omnilog.data.firebase.FirebaseSyncManager.verifyLoginCloud(trimmedEmail, passwordEntered) { isValid, verifyError ->
                 if (!callbackInvoked) {
-                    callbackInvoked = true
-                    timeoutJob.cancel()
-                    viewModelScope.launch(Dispatchers.IO) {
-                        if (cloudAccount != null) {
-                            // Restore pro subscription status and profile details to local Room cache
-                            logDao.updateUserAccount(cloudAccount)
-                            refreshDataInternal()
-                            
-                            val prefs = getApplication<Application>().getSharedPreferences("auth_prefs", android.content.Context.MODE_PRIVATE)
-                            prefs.edit().putString("authenticated_user_email", email).apply()
-                            
-                            withContext(Dispatchers.Main) {
-                                startCloudSynchronizer(email)
-                                notificationManager.sendAlert(
-                                    "Welcome back! ⚡",
-                                    "Successfully synced and restored profile for ${cloudAccount.name}."
-                                )
-                                onSuccess()
-                            }
-                        } else {
-                            // Email is not registered on cloud yet, allow offline sandbox fallback or create account
-                            withContext(Dispatchers.Main) {
-                                onFailure("Email not found in cloud. Please register first.")
+                    if (!isValid) {
+                        callbackInvoked = true
+                        timeoutJob.cancel()
+                        viewModelScope.launch(Dispatchers.Main) {
+                            onFailure(verifyError ?: "Authentication failed")
+                        }
+                        return@verifyLoginCloud
+                    }
+                    
+                    // 4. If password valid, fetch profile and continue
+                    com.example.omnilog.data.firebase.FirebaseSyncManager.fetchUserProfile(trimmedEmail) { cloudAccount ->
+                        if (!callbackInvoked) {
+                            callbackInvoked = true
+                            timeoutJob.cancel()
+                            viewModelScope.launch(Dispatchers.IO) {
+                                if (cloudAccount != null) {
+                                    val localAcc = cloudAccount.copy(userId = "local_user", isPro = cloudAccount.isPro || isUserAdmin)
+                                    logDao.updateUserAccount(localAcc)
+                                    refreshDataInternal()
+                                    
+                                    val prefs = getApplication<Application>().getSharedPreferences("auth_prefs", android.content.Context.MODE_PRIVATE)
+                                    prefs.edit().putString("authenticated_user_email", email).apply()
+                                    
+                                    withContext(Dispatchers.Main) {
+                                        startCloudSynchronizer(email)
+                                        _uiState.value = UiState.Success("Logged in as ${cloudAccount.name}", System.currentTimeMillis())
+                                        onSuccess()
+                                    }
+                                } else {
+                                    withContext(Dispatchers.Main) {
+                                        onFailure("Account not found online. Try registering.")
+                                    }
+                                }
                             }
                         }
                     }
@@ -353,27 +381,26 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun loginUserOffline(email: String, onSuccess: () -> Unit) {
+    fun loginUserOffline(email: String, onSuccess: () -> Unit, onFailure: (String) -> Unit) {
         viewModelScope.launch(Dispatchers.IO) {
             val existing = logDao.getUserAccountSync("local_user")
-            val newUser = if (existing != null) {
-                existing.copy(email = email, name = if (existing.email == email) existing.name else "User")
+            
+            if (existing != null && existing.email.equals(email, ignoreCase = true)) {
+                val prefs = getApplication<Application>().getSharedPreferences("auth_prefs", android.content.Context.MODE_PRIVATE)
+                prefs.edit().putString("authenticated_user_email", email).apply()
+
+                withContext(Dispatchers.Main) {
+                    startCloudSynchronizer(email)
+                    notificationManager.sendAlert(
+                        "Local Sandbox Active ⚡",
+                        "Firebase connection offline or sandbox active. Logged in successfully via local offline sandbox."
+                    )
+                    onSuccess()
+                }
             } else {
-                UserAccount("local_user", "User", email)
-            }
-            logDao.updateUserAccount(newUser)
-            refreshDataInternal()
-
-            val prefs = getApplication<Application>().getSharedPreferences("auth_prefs", android.content.Context.MODE_PRIVATE)
-            prefs.edit().putString("authenticated_user_email", email).apply()
-
-            withContext(Dispatchers.Main) {
-                startCloudSynchronizer(email)
-                notificationManager.sendAlert(
-                    "Local Sandbox Active ⚡",
-                    "Firebase connection offline or sandbox active. Logged in successfully via local offline sandbox."
-                )
-                onSuccess()
+                withContext(Dispatchers.Main) {
+                    onFailure("Account not found locally. Please connect to the internet and register first.")
+                }
             }
         }
     }
@@ -517,8 +544,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 _financialProfile.value = null
                 _isAdminUser.value = false
                 _supportTickets.value = emptyList()
-                _customGroups.value = listOf("General", "Home", "Trip")
-                _cloudSyncStatus.value = "Local Sandbox ⚡"
+                _customGroups.value = emptyList()
+                _cloudSyncStatus.value = "Local Mode ⚡"
                 _isDatabaseEncrypted.value = false
                 _uiState.value = UiState.Idle
             }
@@ -1285,7 +1312,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun addSplitExpense(title: String, totalAmount: Double, paidBy: String, splitWith: String, splitShare: Double, groupName: String = "General") {
+    fun addSplitExpense(title: String, totalAmount: Double, paidBy: String, splitWith: String, splitShare: Double, groupName: String = "") {
         viewModelScope.launch {
             val expense = SplitExpenseEntry(
                 title = title,
@@ -1318,7 +1345,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             _uiState.value = UiState.Loading
             try {
-                var groupName = "General"
+                var groupName = ""
                 withContext(Dispatchers.IO) {
                     val expense = logDao.getSplitExpenseSync(id)
                     if (expense != null) {
@@ -1357,7 +1384,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun deleteSplitExpense(id: Long) {
         viewModelScope.launch {
-            var groupName = "General"
+            var groupName = ""
             withContext(Dispatchers.IO) {
                 val expense = logDao.getSplitExpenseSync(id)
                 if (expense != null) {
@@ -1410,7 +1437,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
         // Must check for a REAL Firebase connection (not a sandbox fallback), same as startCloudSynchronizer.
         val isRealFirebase = com.example.omnilog.data.firebase.FirebaseSyncManager.isInitialized &&
-                             com.example.omnilog.data.firebase.FirebaseSyncManager.database.app.name != "RoutineLogCloud" &&
+                             !com.example.omnilog.data.firebase.FirebaseSyncManager.isSandboxMode &&
                              isNetworkAvailable()
         if (isRealFirebase) {
             com.example.omnilog.data.firebase.FirebaseSyncManager.updateAppSettings("pricingPlanMonthly", monthly)
@@ -1419,10 +1446,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 com.example.omnilog.data.firebase.FirebaseSyncManager.updateAppSettings("pricingPlanLifetime", lifetime)
             }
             notificationManager.sendAlert("Premium Pricing Published 💸", "Live prices updated: Monthly=$monthly · Yearly=$yearly")
-            _uiState.value = UiState.Success("Pricing plans published to Firebase! All users will see new prices.")
+            _uiState.value = UiState.Success("Pricing plans published! All users will see new prices.", System.currentTimeMillis())
         } else {
-            notificationManager.sendAlert("Offline — Pricing Saved Locally ⚡", "Firebase offline or sandbox mode. Prices saved locally only.")
-            _uiState.value = UiState.Error("Firebase offline. Prices updated locally but not published to cloud.")
+            _uiState.value = UiState.Error("Failed: Connect to the internet.", System.currentTimeMillis())
         }
     }
 
@@ -1440,10 +1466,34 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun sendAppInvitation(inviteeEmail: String) {
+        if (com.example.omnilog.data.firebase.FirebaseSyncManager.isInitialized) {
+            val senderName = userAccount.value?.name ?: "A friend"
+            com.example.omnilog.data.firebase.FirebaseSyncManager.sendAppInvitation(inviteeEmail, senderName)
+            _uiState.value = UiState.Success("Email invite sent to $inviteeEmail!", System.currentTimeMillis())
+        }
+    }
+
+    fun updatePaymentGateway(provider: String, publicKey: String, secretKey: String, upiId: String) {
+        val isRealFirebase = com.example.omnilog.data.firebase.FirebaseSyncManager.isInitialized &&
+                             !com.example.omnilog.data.firebase.FirebaseSyncManager.isSandboxMode &&
+                             isNetworkAvailable()
+        
+        if (isRealFirebase) {
+            com.example.omnilog.data.firebase.FirebaseSyncManager.updateAppSettings("paymentGatewayProvider", provider)
+            com.example.omnilog.data.firebase.FirebaseSyncManager.updateAppSettings("paymentGatewayPublicKey", publicKey)
+            com.example.omnilog.data.firebase.FirebaseSyncManager.updateAppSettings("paymentGatewaySecretKey", secretKey)
+            com.example.omnilog.data.firebase.FirebaseSyncManager.updateAppSettings("paymentGatewayUpiId", upiId)
+            _uiState.value = UiState.Success("Payment gateway configuration published.", System.currentTimeMillis())
+        } else {
+            _uiState.value = UiState.Error("Failed: Connect to the internet.", System.currentTimeMillis())
+        }
+    }
+
     sealed class UiState {
         object Idle : UiState()
         object Loading : UiState()
-        data class Success(val message: String) : UiState()
-        data class Error(val message: String) : UiState()
+        data class Success(val message: String, val id: Long = System.currentTimeMillis()) : UiState()
+        data class Error(val message: String, val id: Long = System.currentTimeMillis()) : UiState()
     }
 }

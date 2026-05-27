@@ -222,8 +222,8 @@ fun LogsScreen(viewModel: MainViewModel) {
                             .fillMaxWidth()
                             .onFocusChanged { searchFocused = it.isFocused },
                         colors = TextFieldDefaults.colors(
-                            focusedTextColor = Color.White,
-                            unfocusedTextColor = Color.White,
+                            focusedTextColor = MaterialTheme.colorScheme.onSurface,
+                            unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
                             focusedContainerColor = Color.Transparent,
                             unfocusedContainerColor = Color.Transparent,
                             disabledContainerColor = Color.Transparent,
@@ -899,12 +899,12 @@ fun ReceiptScannerDialog(
                             singleLine = true,
                             modifier = Modifier.fillMaxWidth(),
                             colors = OutlinedTextFieldDefaults.colors(
-                                focusedTextColor = Color.White,
-                                unfocusedTextColor = Color.White,
+                                focusedTextColor = MaterialTheme.colorScheme.onSurface,
+                                unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
                                 focusedBorderColor = BrandViolet,
                                 unfocusedBorderColor = Color(0x33FFFFFF),
                                 focusedLabelColor = BrandViolet,
-                                unfocusedLabelColor = Color.White.copy(alpha = 0.6f),
+                                unfocusedLabelColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                                 cursorColor = BrandViolet
                             )
                         )
@@ -919,12 +919,12 @@ fun ReceiptScannerDialog(
                                 modifier = Modifier.fillMaxSize(),
                                 maxLines = 8,
                                 colors = OutlinedTextFieldDefaults.colors(
-                                    focusedTextColor = Color.White,
-                                    unfocusedTextColor = Color.White,
+                                    focusedTextColor = MaterialTheme.colorScheme.onSurface,
+                                    unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
                                     focusedBorderColor = BrandCyan,
                                     unfocusedBorderColor = Color(0x33FFFFFF),
                                     focusedLabelColor = BrandCyan,
-                                    unfocusedLabelColor = Color.White.copy(alpha = 0.6f),
+                                    unfocusedLabelColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                                     cursorColor = BrandCyan
                                 )
                             )
