@@ -22,6 +22,6 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "RoutineLog"
+rootProject.name = "HearthFlow"
 include(":app")
  

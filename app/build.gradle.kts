@@ -13,11 +13,11 @@ java {
 }
 
 android {
-    namespace = "com.example.omnilog"
+    namespace = "com.example.hearthflow"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.example.omnilog"
+        applicationId = "com.example.hearthflow"
         minSdk = 24
         targetSdk = 35
         versionCode = 1

@@ -32,15 +32,15 @@ exports.onUserRegistration = functions
     if (!email) return null;
 
     const mailOptions = {
-      from: `"RoutineLog Support" <${process.env.GMAIL_EMAIL}>`,
+      from: `"HearthFlow Support" <${process.env.GMAIL_EMAIL}>`,
       to: email,
-      subject: 'Welcome to RoutineLog! 🎉',
+      subject: 'Welcome to HearthFlow! 🎉',
       html: `
-        <h2>Hi ${name}, welcome to RoutineLog!</h2>
+        <h2>Hi ${name}, welcome to HearthFlow!</h2>
         <p>We're thrilled to have you on board.</p>
         <p>Start logging your routines, splitting expenses securely, and managing your financial future today.</p>
         <br/>
-        <p>Best regards,<br/>The RoutineLog Team</p>
+        <p>Best regards,<br/>The HearthFlow Team</p>
       `,
     };
 
@@ -72,15 +72,15 @@ exports.onGroupInvitation = functions
       const groupName = groupInfo ? groupInfo.name : 'a new group';
 
       const mailOptions = {
-        from: `"RoutineLog Team" <${process.env.GMAIL_EMAIL}>`,
+        from: `"HearthFlow Team" <${process.env.GMAIL_EMAIL}>`,
         to: userProfile.email,
         subject: `You've been invited to ${groupName}!`,
         html: `
           <h2>Hello ${userProfile.name},</h2>
           <p>Great news! You have been added to the shared ledger group: <b>${groupName}</b>.</p>
-          <p>Open your RoutineLog app to view the group and start splitting expenses.</p>
+          <p>Open your HearthFlow app to view the group and start splitting expenses.</p>
           <br/>
-          <p>Best,<br/>The RoutineLog Team</p>
+          <p>Best,<br/>The HearthFlow Team</p>
         `,
       };
 
@@ -107,15 +107,15 @@ exports.onAppInvitation = functions
     if (!inviteeEmail) return null;
 
     const mailOptions = {
-      from: `"RoutineLog Team" <${process.env.GMAIL_EMAIL}>`,
+      from: `"HearthFlow Team" <${process.env.GMAIL_EMAIL}>`,
       to: inviteeEmail,
-      subject: `${senderName} invited you to RoutineLog!`,
+      subject: `${senderName} invited you to HearthFlow!`,
       html: `
         <h2>Hi there!</h2>
-        <p><b>${senderName}</b> has invited you to join RoutineLog—the ultimate secure hybrid financial ledger and daily planner.</p>
+        <p><b>${senderName}</b> has invited you to join HearthFlow—the ultimate secure hybrid financial ledger and daily planner.</p>
         <p>Get started today by downloading the app and taking control of your routines and finances.</p>
         <br/>
-        <p>Best,<br/>The RoutineLog Team</p>
+        <p>Best,<br/>The HearthFlow Team</p>
       `,
     };
 

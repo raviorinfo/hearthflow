@@ -1,5 +1,5 @@
 {
-  "name": "routinelog-functions",
+  "name": "hearthflow-functions",
   "description": "Cloud Functions for Firebase",
   "dependencies": {
     "firebase-admin": "^11.8.0",
